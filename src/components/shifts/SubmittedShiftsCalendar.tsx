@@ -129,7 +129,9 @@ function MonthCalendar({
 
               <span style={{ fontSize: '16px', fontWeight: 800, color: numColor, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{day}</span>
               <span style={{ fontSize: '8px', fontWeight: 700, color: '#006633', textAlign: 'center', lineHeight: 1.3 }}>
-                {formatTime(shift.start_time)}〜<br />{formatTime(shift.end_time)}
+                {shift.is_open_start && shift.is_open_end
+                  ? '◎'
+                  : <>{shift.is_open_start ? '〇' : formatTime(shift.start_time)}〜<br />{shift.is_open_end ? '〇' : formatTime(shift.end_time)}</>}
               </span>
 
               {/* 通常モード削除ボタン */}

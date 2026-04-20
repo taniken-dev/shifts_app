@@ -26,6 +26,9 @@ export const shiftSchema = z
       .max(500, '備考は500文字以内で入力してください')
       .optional()
       .nullable(),
+
+    is_open_end:   z.boolean().optional().default(false),
+    is_open_start: z.boolean().optional().default(false),
   })
   .refine(
     (data) => {

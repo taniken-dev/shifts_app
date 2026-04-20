@@ -8,8 +8,9 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile, ShiftWithProfile, ShiftStatus } from '@/types/database'
-import { calcDeadline, formatDeadline } from '@/lib/utils/deadline'
+import { calcDeadline, formatDeadline, BYPASS_DEADLINE } from '@/lib/utils/deadline'
 import { Toast } from '@/components/ui/Toast'
+import WorkScheduleExportButton from './WorkScheduleExportButton'
 
 // ── 定数 ─────────────────────────────────────────────────────────────────────
 
@@ -252,7 +253,11 @@ export default function ShiftMatrix({
       s.full_name,
       ...dates.map(d => {
         const sh = shiftMap.get(s.id)?.get(d)
-        return sh ? `${sh.start_time.slice(0, 5)}-${sh.end_time.slice(0, 5)}` : '—'
+        return sh
+          ? (sh.is_open_start && sh.is_open_end
+              ? '◎'
+              : `${sh.is_open_start ? '〇' : sh.start_time.slice(0,5)}-${sh.is_open_end ? '〇' : sh.end_time.slice(0,5)}`)
+          : '—'
       }),
     ])
     const summaryRows = TIME_SLOTS.map(slot => [
@@ -278,7 +283,7 @@ export default function ShiftMatrix({
   const periodLabel = period === 'first' ? `1〜15日` : `16日〜月末`
 
   const deadline        = useMemo(() => calcDeadline(month, period), [month, period])
-  const isBeforeDeadline = useMemo(() => new Date() <= deadline, [deadline])
+  const isBeforeDeadline = useMemo(() => !BYPASS_DEADLINE && new Date() <= deadline, [deadline])
 
   const timesChanged = popoverShift
     ? popoverShift.start_time.slice(0, 5) !== popoverStart ||
@@ -344,6 +349,8 @@ export default function ShiftMatrix({
           >
             <Download size={14} aria-hidden />CSVエクスポート
           </button>
+
+          <WorkScheduleExportButton month={month} period={period} />
         </div>
       </div>
 
@@ -680,7 +687,9 @@ function ShiftCell({ shift, rowBg, isSun, isSat, onClick }: ShiftCellProps) {
     )
   }
 
-  const timeStr    = `${shift.start_time.slice(0, 5)}〜${shift.end_time.slice(0, 5)}`
+  const timeStr    = shift.is_open_start && shift.is_open_end
+    ? '◎'
+    : `${shift.is_open_start ? '〇' : shift.start_time.slice(0,5)}〜${shift.is_open_end ? '〇' : shift.end_time.slice(0,5)}`
   const isAdjusted = shift.admin_adjusted
   const posGroup   = shift.position
     ? (POSITION_GROUPS.kitchen as readonly string[]).includes(shift.position) ? 'kitchen' : 'front'

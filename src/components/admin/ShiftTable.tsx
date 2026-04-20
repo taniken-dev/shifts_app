@@ -76,7 +76,9 @@ export default function ShiftTable({ shifts }: ShiftTableProps) {
                     <p className="text-xs text-gray-400">{shift.profiles.staff_code}</p>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap font-semibold" style={{ color: 'var(--mos-green)' }}>
-                    {shift.start_time.slice(0, 5)}〜{shift.end_time.slice(0, 5)}
+                    {shift.is_open_start && shift.is_open_end
+                      ? '◎'
+                      : `${shift.is_open_start ? '〇' : shift.start_time.slice(0,5)}〜${shift.is_open_end ? '〇' : shift.end_time.slice(0,5)}`}
                   </td>
                   <td className="px-4 py-3 max-w-[120px] truncate text-gray-500">
                     {shift.note ?? '—'}

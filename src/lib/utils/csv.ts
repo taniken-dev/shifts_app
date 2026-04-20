@@ -14,17 +14,20 @@ export function shiftsToCSV(shifts: ShiftWithProfile[]): string {
   }
 
   const rows = shifts.map((s) => {
-    const [sh, sm] = s.start_time.split(':').map(Number)
-    const [eh, em] = s.end_time.split(':').map(Number)
-    const durationMin = (eh * 60 + em) - (sh * 60 + sm)
+    const [sh, sm]   = s.start_time.split(':').map(Number)
+    const startDisplay = s.is_open_start && s.is_open_end ? '◎' : s.is_open_start ? '〇' : s.start_time.slice(0, 5)
+    const endDisplay   = s.is_open_start && s.is_open_end ? '◎' : s.is_open_end   ? '〇' : s.end_time.slice(0, 5)
+    const durationMin  = s.is_open_end || s.is_open_start
+      ? '〇'
+      : String((() => { const [eh, em] = s.end_time.split(':').map(Number); return (eh * 60 + em) - (sh * 60 + sm) })())
 
     return [
       s.shift_date,
       s.profiles.staff_code,
       s.profiles.full_name,
-      s.start_time.slice(0, 5),
-      s.end_time.slice(0, 5),
-      String(durationMin),
+      startDisplay,
+      endDisplay,
+      durationMin,
       s.note ?? '',
       STATUS_LABELS[s.status] ?? s.status,
     ]

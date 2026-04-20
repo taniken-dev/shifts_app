@@ -63,7 +63,9 @@ export default function ShiftCard({ shift }: ShiftCardProps) {
         </p>
         {/* 時間 */}
         <p className="mt-0.5 text-base font-bold" style={{ color: 'var(--mos-green)' }}>
-          {shift.start_time.slice(0, 5)} 〜 {shift.end_time.slice(0, 5)}
+          {shift.is_open_start && shift.is_open_end
+            ? '◎'
+            : `${shift.is_open_start ? '〇' : shift.start_time.slice(0,5)} 〜 ${shift.is_open_end ? '〇' : shift.end_time.slice(0,5)}`}
         </p>
         {/* 備考 */}
         {shift.note && (

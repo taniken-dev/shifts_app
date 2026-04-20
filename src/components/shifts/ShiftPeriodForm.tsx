@@ -7,27 +7,31 @@ import {
   X, ChevronLeft, ChevronRight, CheckSquare, Pencil,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { calcDeadline, formatDeadline } from '@/lib/utils/deadline'
+import { calcDeadline, formatDeadline, BYPASS_DEADLINE } from '@/lib/utils/deadline'
 import DayShiftCard, { type DayEntry } from './DayShiftCard'
 import { Toast } from '@/components/ui/Toast'
 
 type Period = 'first' | 'second'
 
 type ExistingShift = {
-  start_time:     string
-  end_time:       string
-  status:         'submitted' | 'approved' | 'rejected'
+  start_time:    string
+  end_time:      string
+  status:        'submitted' | 'approved' | 'rejected'
   admin_adjusted: boolean
+  is_open_end:   boolean
+  is_open_start: boolean
 }
 
 const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
 
 const BULK_PRESETS = [
-  { label: '11〜17', start: '11:00', end: '17:00' },
-  { label: '11〜15', start: '11:00', end: '15:00' },
-  { label: '17〜21', start: '17:00', end: '21:00' },
-  { label: '終日',   start: '09:00', end: '21:00' },
-] as const
+  { label: '11〜17', start: '11:00', end: '17:00', isOpenStart: false, isOpenEnd: false },
+  { label: '11〜15', start: '11:00', end: '15:00', isOpenStart: false, isOpenEnd: false },
+  { label: '〇〜17', start: '09:00', end: '17:00', isOpenStart: true,  isOpenEnd: false },
+  { label: '〇〜15', start: '09:00', end: '15:00', isOpenStart: true,  isOpenEnd: false },
+  { label: '17〜〇', start: '17:00', end: '22:00', isOpenStart: false, isOpenEnd: true  },
+  { label: '◎',     start: '09:00', end: '22:00', isOpenStart: true,  isOpenEnd: true  },
+]
 
 function buildMonthOptions(): { value: string; label: string }[] {
   const now = new Date()
@@ -51,9 +55,11 @@ function buildEntries(monthStr: string, period: Period): DayEntry[] {
   const [start, end] = periodRange(period, y, m)
   return Array.from({ length: end - start + 1 }, (_, i) => ({
     date:      `${y}-${String(m).padStart(2, '0')}-${String(start + i).padStart(2, '0')}`,
-    isOff:     null,
-    startTime: '11:00',
-    endTime:   '17:00',
+    isOff:       true,
+    startTime:   '11:00',
+    endTime:     '17:00',
+    isOpenStart: false,
+    isOpenEnd:   false,
   }))
 }
 
@@ -152,7 +158,9 @@ function CalendarCell({ entry, hasError, isSelected, isBulkMode, isBulkSelected,
         <span style={{ fontSize: '8px', fontWeight: 700, color: '#d6231e' }}>⚠</span>
       ) : (
         <span style={{ fontSize: '8px', fontWeight: 600, color: '#006633', lineHeight: 1.3, textAlign: 'center' }}>
-          {entry.startTime.replace(':00', '')}〜{entry.endTime.replace(':00', '')}
+          {entry.isOpenStart && entry.isOpenEnd
+            ? '◎'
+            : `${entry.isOpenStart ? '〇' : entry.startTime.replace(':00','')}〜${entry.isOpenEnd ? '〇' : entry.endTime.replace(':00','')}`}
         </span>
       )}
 
@@ -303,7 +311,7 @@ export default function ShiftPeriodForm() {
   const [period,           setPeriod]           = useState<Period>('first')
 
   const deadline       = useMemo(() => calcDeadline(month, period), [month, period])
-  const isPastDeadline = useMemo(() => new Date() > deadline, [deadline])
+  const isPastDeadline = useMemo(() => !BYPASS_DEADLINE && new Date() > deadline, [deadline])
   const [entries,          setEntries]          = useState<DayEntry[]>(() => buildEntries(defaultMonth, 'first'))
   const [isPending,        startTransition]     = useTransition()
   const [success,          setSuccess]          = useState(false)
@@ -341,7 +349,7 @@ export default function ShiftPeriodForm() {
 
       const { data } = await supabase
         .from('shifts')
-        .select('shift_date, start_time, end_time, status, admin_adjusted')
+        .select('shift_date, start_time, end_time, status, admin_adjusted, is_open_end, is_open_start')
         .eq('profile_id', user.id)
         .gte('shift_date', `${y}-${pad(m)}-${pad(s)}`)
         .lte('shift_date', `${y}-${pad(m)}-${pad(e)}`)
@@ -355,6 +363,8 @@ export default function ShiftPeriodForm() {
                 end_time:       r.end_time,
                 status:         r.status as ExistingShift['status'],
                 admin_adjusted: r.admin_adjusted ?? false,
+                is_open_end:    r.is_open_end   ?? false,
+                is_open_start:  r.is_open_start ?? false,
               }]))
             : new Map()
         )
@@ -387,7 +397,7 @@ export default function ShiftPeriodForm() {
   const [s, e]      = periodRange(period, y, m)
   const periodLabel = `${m}月${s}日〜${e}日`
   const workingList = entries.filter(en => en.isOff === false)
-  const hasErrors   = entries.some(en => en.isOff === false && en.startTime >= en.endTime)
+  const hasErrors   = entries.some(en => en.isOff === false && !en.isOpenEnd && !en.isOpenStart && en.startTime >= en.endTime)
   // 編集モードでは出勤0日でも更新可（全削除の意図）
   const canSubmit   = !isPending && (isEditMode
     ? !hasErrors
@@ -425,10 +435,10 @@ export default function ShiftPeriodForm() {
   function bulkSelectAll() { setBulkSet(new Set(entries.map((_, i) => i))) }
   function bulkClearAll()  { setBulkSet(new Set()) }
 
-  function applyBulkPreset(startTime: string, endTime: string) {
+  function applyBulkPreset(startTime: string, endTime: string, isOpenStart: boolean, isOpenEnd: boolean) {
     if (bulkSet.size === 0) return
     setEntries(prev => prev.map((en, i) =>
-      bulkSet.has(i) ? { ...en, isOff: false, startTime, endTime } : en
+      bulkSet.has(i) ? { ...en, isOff: false, startTime, endTime, isOpenStart, isOpenEnd } : en
     ))
     clearBulk()
   }
@@ -458,12 +468,14 @@ export default function ShiftPeriodForm() {
       if (existing?.status === 'submitted') {
         return {
           ...entry,
-          isOff:     false,
-          startTime: existing.start_time.slice(0, 5),
-          endTime:   existing.end_time.slice(0, 5),
+          isOff:       false,
+          startTime:   existing.start_time.slice(0, 5),
+          endTime:     existing.end_time.slice(0, 5),
+          isOpenStart: existing.is_open_start,
+          isOpenEnd:   existing.is_open_end,
         }
       }
-      return { ...entry, isOff: null, startTime: '11:00', endTime: '17:00' }
+      return { ...entry, isOff: true, startTime: '11:00', endTime: '17:00', isOpenStart: false, isOpenEnd: false }
     }))
     setIsEditMode(true)
     setSuccess(false)
@@ -505,10 +517,12 @@ export default function ShiftPeriodForm() {
     const committedMap = new Map<string, ExistingShift>([
       ...approvedEntries,
       ...workingList.map(en => [en.date, {
-        start_time:     roundTo30Min(en.startTime),
-        end_time:       roundTo30Min(en.endTime),
-        status:         'submitted' as const,
+        start_time:    en.isOpenStart ? '09:00' : roundTo30Min(en.startTime),
+        end_time:      en.isOpenEnd   ? '22:00' : roundTo30Min(en.endTime),
+        status:        'submitted' as const,
         admin_adjusted: false,
+        is_open_end:   en.isOpenEnd,
+        is_open_start: en.isOpenStart,
       }] as [string, ExistingShift]),
     ])
 
@@ -546,11 +560,13 @@ export default function ShiftPeriodForm() {
 
       if (workingList.length > 0) {
         const records = workingList.map(en => ({
-          profile_id: user.id,
-          shift_date: en.date,
-          start_time: roundTo30Min(en.startTime),
-          end_time:   roundTo30Min(en.endTime),
-          note:       null,
+          profile_id:   user.id,
+          shift_date:   en.date,
+          start_time:   en.isOpenStart ? '09:00' : roundTo30Min(en.startTime),
+          end_time:     en.isOpenEnd   ? '22:00' : roundTo30Min(en.endTime),
+          is_open_start: en.isOpenStart,
+          is_open_end:  en.isOpenEnd,
+          note:         null,
         }))
 
         const { error } = isEditMode
@@ -781,7 +797,9 @@ export default function ShiftPeriodForm() {
                 approvedTime={(() => {
                   const s = optimisticShifts.get(entry.date)
                   if (s?.status !== 'approved') return undefined
-                  return `${s.start_time.slice(0,5)}〜${s.end_time.slice(0,5)}`
+                  return s.is_open_start && s.is_open_end
+                    ? '◎'
+                    : `${s.is_open_start ? '〇' : s.start_time.slice(0,5)}〜${s.is_open_end ? '〇' : s.end_time.slice(0,5)}`
                 })()}
                 onClick={() => {
                   if (isPastDeadline) return
@@ -801,7 +819,7 @@ export default function ShiftPeriodForm() {
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
               {BULK_PRESETS.map(p => (
-                <button key={p.label} type="button" onClick={() => applyBulkPreset(p.start, p.end)}
+                <button key={p.label} type="button" onClick={() => applyBulkPreset(p.start, p.end, p.isOpenStart, p.isOpenEnd)}
                   className="chip-square chip-square-active">
                   {p.label}
                 </button>

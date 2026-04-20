@@ -25,10 +25,12 @@ export interface Shift {
   profile_id:     string
   shift_date:     string        // "YYYY-MM-DD"
   start_time:     string        // "HH:MM"
-  end_time:       string        // "HH:MM"
+  end_time:       string        // "HH:MM" — is_open_end=true のとき 22:00 で統一
   note:           string | null
   status:         ShiftStatus
   admin_adjusted: boolean
+  is_open_end:    boolean       // true = メンテ（閉店作業）まで対応可。UI では「〇」表示
+  is_open_start:  boolean       // true = 開始時間フリー（何時からでも可）。UI では「〇」表示
   position:       string | null // 当日ポジション（スタッフにも公開）
   created_at:     string
   updated_at:     string
@@ -82,6 +84,8 @@ export type Database = {
           note:           string | null
           status:         'submitted' | 'approved' | 'rejected'
           admin_adjusted: boolean
+          is_open_end:    boolean
+          is_open_start:  boolean
           position:       string | null
           created_at:     string
           updated_at:     string
@@ -93,6 +97,8 @@ export type Database = {
           end_time:        string
           note?:           string | null
           admin_adjusted?: boolean
+          is_open_end?:    boolean
+          is_open_start?:  boolean
           position?:       string | null
         }
         Update: {
@@ -102,6 +108,8 @@ export type Database = {
           note?:           string | null
           status?:         'submitted' | 'approved' | 'rejected'
           admin_adjusted?: boolean
+          is_open_end?:    boolean
+          is_open_start?:  boolean
           position?:       string | null
         }
         Relationships: [
