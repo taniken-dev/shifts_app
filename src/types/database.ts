@@ -15,7 +15,9 @@ export interface Profile {
   full_name:   string
   role:        Role
   is_active:   boolean
-  level:       number | null   // 習熟度レベル 1〜6（管理者のみ閲覧）
+  is_approved: boolean
+  is_deletion_requested: boolean
+  skills:      string[]
   created_at:  string
   updated_at:  string
 }
@@ -53,7 +55,9 @@ export type Database = {
           full_name:   string
           role:        'staff' | 'admin'
           is_active:   boolean
-          level:       number | null
+          is_approved: boolean
+          is_deletion_requested: boolean
+          skills:      string[]
           created_at:  string
           updated_at:  string
         }
@@ -63,14 +67,18 @@ export type Database = {
           full_name:   string
           role:        'staff' | 'admin'
           is_active:   boolean
-          level?:      number | null
+          is_approved?: boolean
+          is_deletion_requested?: boolean
+          skills?:      string[]
         }
         Update: {
           staff_code?: string
           full_name?:  string
           role?:       'staff' | 'admin'
           is_active?:  boolean
-          level?:      number | null
+          is_approved?: boolean
+          is_deletion_requested?: boolean
+          skills?:      string[]
         }
         Relationships: []
       }

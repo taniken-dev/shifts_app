@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { CalendarDays, Users, LayoutList, ClipboardList } from 'lucide-react'
+import { CalendarDays, Users, LayoutList, ClipboardList, UserCircle2 } from 'lucide-react'
 import type { Role } from '@/types/database'
 import LogoutButton from './LogoutButton'
 import MobileMenu from './MobileMenu'
@@ -83,9 +83,14 @@ export default function NavBar({ fullName, role }: NavBarProps) {
               </NavLink>
             </>
           ) : (
-            <NavLink href="/staff/shifts" icon={<CalendarDays size={14} aria-hidden />}>
-              シフト希望
-            </NavLink>
+            <>
+              <NavLink href="/staff/shifts" icon={<CalendarDays size={14} aria-hidden />}>
+                シフト希望
+              </NavLink>
+              <NavLink href="/staff/profile" icon={<UserCircle2 size={14} aria-hidden />}>
+                プロフィール
+              </NavLink>
+            </>
           )}
         </nav>
 

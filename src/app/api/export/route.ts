@@ -13,11 +13,11 @@ export async function GET(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, is_approved')
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'admin') {
+  if (profile?.role !== 'admin' || !profile.is_approved) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

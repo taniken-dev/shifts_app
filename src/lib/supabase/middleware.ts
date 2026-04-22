@@ -36,8 +36,12 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // 未認証ユーザーをログインページへリダイレクト
-  const isAuthRoute    = pathname.startsWith('/login')
-  const isDashboard    = pathname.startsWith('/staff') || pathname.startsWith('/admin')
+  const isAuthRoute = pathname.startsWith('/login')
+  const isPendingRoute = pathname.startsWith('/pending')
+  const isDashboard =
+    pathname.startsWith('/staff') ||
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/dashboard')
 
   if (!user && isDashboard) {
     const url = request.nextUrl.clone()
@@ -45,10 +49,32 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // 認証済みユーザーがログインページに来たらルートへ（ロール判定はサーバーページで行う）
-  if (user && isAuthRoute) {
+  if (!user) {
+    return supabaseResponse
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_approved')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (!profile?.is_approved && isDashboard) {
     const url = request.nextUrl.clone()
-    url.pathname = '/'
+    url.pathname = '/pending'
+    return NextResponse.redirect(url)
+  }
+
+  if (profile?.is_approved && isPendingRoute) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
+
+  // 認証済みユーザーがログインページに来たら遷移先を制御
+  if (isAuthRoute) {
+    const url = request.nextUrl.clone()
+    url.pathname = profile?.is_approved ? '/' : '/pending'
     return NextResponse.redirect(url)
   }
 

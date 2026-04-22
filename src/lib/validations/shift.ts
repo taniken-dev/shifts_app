@@ -67,7 +67,7 @@ export const shiftStatusSchema = z.object({
 
 export type ShiftStatusInput = z.infer<typeof shiftStatusSchema>
 
-// スタッフ登録（管理者専用）
+// スタッフ招待（管理者専用）
 export const staffSchema = z.object({
   email: z
     .string()
@@ -82,11 +82,6 @@ export const staffSchema = z.object({
     .min(1, 'スタッフコードを入力してください')
     .max(10, 'スタッフコードは10文字以内にしてください')
     .regex(/^[A-Za-z0-9]+$/, 'スタッフコードは英数字のみ使用できます'),
-  password: z
-    .string()
-    .min(8, 'パスワードは8文字以上にしてください')
-    .regex(/[A-Z]/, '大文字を1文字以上含めてください')
-    .regex(/[0-9]/, '数字を1文字以上含めてください'),
 })
 
 export type StaffInput = z.infer<typeof staffSchema>

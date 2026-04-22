@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
-// ルートページ — ロールに応じたダッシュボードへリダイレクト
-export default async function RootPage() {
+export default async function DashboardEntryPage() {
   const supabase = await createServerSupabaseClient()
-
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+
+  if (!user) {
+    redirect('/login')
+  }
 
   const { data: profile } = await supabase
     .from('profiles')

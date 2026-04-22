@@ -3,6 +3,8 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { staffSchema } from '@/lib/validations/shift'
 import { z } from 'zod'
 
+const SKILL_OPTIONS = ['レジ', 'セッター', 'カウンター', 'フライヤー', 'グリル', '仕込み', 'メンテ', '閉店作業'] as const
+
 /** 管理者権限チェック共通処理 */
 async function assertAdmin() {
   const supabase = await createServerSupabaseClient()
@@ -11,18 +13,18 @@ async function assertAdmin() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, is_approved')
     .eq('id', user.id)
     .single()
 
-  if (profile?.role !== 'admin') {
+  if (profile?.role !== 'admin' || !profile.is_approved) {
     return { error: 'Forbidden', status: 403, supabase: null, user: null }
   }
 
   return { error: null, status: 200, supabase, user }
 }
 
-// POST /api/admin/staff — 新規スタッフ登録
+// POST /api/admin/staff — スタッフ招待メール送信
 export async function POST(request: NextRequest) {
   const { error, status, supabase } = await assertAdmin()
   if (error || !supabase) {
@@ -44,37 +46,52 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const { email, full_name, staff_code, password } = result.data
+  const { email, full_name, staff_code } = result.data
 
-  // Service Role でユーザー作成（RLS をバイパスする必要があるため）
+  const redirectTo = new URL('/auth/callback', request.nextUrl.origin)
+  redirectTo.searchParams.set(
+    'next',
+    process.env.NEXT_PUBLIC_AUTH_REDIRECT_PATH || '/dashboard',
+  )
+
+  // Service Role でユーザー招待（スタッフ本人がメールからパスワード設定）
   const admin = createServiceRoleClient()
-  const { data: newUser, error: createError } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { full_name, role: 'staff' },
+  const { data: invitedUser, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
+    data: { full_name, role: 'staff' },
+    redirectTo: redirectTo.toString(),
   })
 
-  if (createError) {
-    if (createError.message.includes('already registered')) {
+  if (inviteError) {
+    if (inviteError.message.includes('already registered')) {
       return NextResponse.json(
         { error: 'このメールアドレスは既に登録されています' },
         { status: 409 },
       )
     }
-    console.error('createUser error:', createError.message)
-    return NextResponse.json({ error: 'ユーザーの作成に失敗しました' }, { status: 500 })
+    console.error('inviteUserByEmail error:', inviteError.message)
+    return NextResponse.json({ error: '招待メールの送信に失敗しました' }, { status: 500 })
+  }
+
+  const invitedUserId = invitedUser.user?.id
+  if (!invitedUserId) {
+    return NextResponse.json({ error: '招待ユーザーの作成に失敗しました' }, { status: 500 })
   }
 
   // profiles の staff_code と full_name を確定値で更新（トリガーで仮値が入っているため）
   const { error: profileError } = await admin
     .from('profiles')
-    .update({ staff_code, full_name })
-    .eq('id', newUser.user.id)
+    .update({
+      staff_code,
+      full_name,
+      is_approved: false,
+      is_deletion_requested: false,
+      skills: [],
+    })
+    .eq('id', invitedUserId)
 
   if (profileError) {
     console.error('profile update error:', profileError.message)
-    // ユーザーは作成済みなのでロールバックはしない（手動で修正できる）
+    // 招待メールは送信済みなのでロールバックしない（管理画面で手動修正可能）
   }
 
   return NextResponse.json({ ok: true }, { status: 201 })
@@ -82,12 +99,15 @@ export async function POST(request: NextRequest) {
 
 // PUT /api/admin/staff — プロフィール編集
 const putSchema = z.object({
-  id:         z.string().uuid(),
-  full_name:  z.string().min(1, '氏名を入力してください'),
-  staff_code: z.string().min(1, 'スタッフコードを入力してください'),
-  role:       z.enum(['staff', 'admin']),
-  is_active:  z.boolean(),
-  level:      z.number().int().min(1).max(6).nullable().optional(),
+  id:                   z.string().uuid(),
+  full_name:            z.string().min(1, '氏名を入力してください'),
+  staff_code:           z.string().min(1, 'スタッフコードを入力してください'),
+  role:                 z.enum(['staff', 'admin']),
+  is_active:            z.boolean(),
+  skills:               z.array(z.enum(SKILL_OPTIONS)).default([]),
+  email:                z.string().email('有効なメールアドレスを入力してください').toLowerCase(),
+  new_password:         z.string().min(8, 'パスワードは8文字以上にしてください').optional().or(z.literal('')),
+  is_deletion_requested:z.boolean().optional(),
 })
 
 export async function PUT(request: NextRequest) {
@@ -111,15 +131,35 @@ export async function PUT(request: NextRequest) {
     )
   }
 
-  const { id, full_name, staff_code, role, is_active, level } = result.data
+  const { id, full_name, staff_code, role, is_active, skills, email, new_password, is_deletion_requested } = result.data
 
   if (id === user.id && role !== 'admin') {
     return NextResponse.json({ error: '自分自身の権限は変更できません' }, { status: 403 })
   }
 
+  const admin = createServiceRoleClient()
+  const passwordToUpdate = new_password?.trim() ? new_password.trim() : null
+
+  const { error: authUpdateError } = await admin.auth.admin.updateUserById(id, {
+    email,
+    ...(passwordToUpdate ? { password: passwordToUpdate } : {}),
+  })
+
+  if (authUpdateError) {
+    console.error('auth user update error:', authUpdateError.message)
+    return NextResponse.json({ error: 'メールアドレスまたはパスワードの更新に失敗しました' }, { status: 500 })
+  }
+
   const { error: updateError } = await supabase
     .from('profiles')
-    .update({ full_name, staff_code, role, is_active, level: level ?? null })
+    .update({
+      full_name,
+      staff_code,
+      role,
+      is_active,
+      skills,
+      ...(is_deletion_requested !== undefined ? { is_deletion_requested } : {}),
+    })
     .eq('id', id)
 
   if (updateError) {
@@ -130,11 +170,19 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
-// PATCH /api/admin/staff — is_active トグル
+// PATCH /api/admin/staff — is_active / is_approved 更新
 const patchSchema = z.object({
-  id:        z.string().uuid(),
-  is_active: z.boolean(),
-})
+  id:                    z.string().uuid(),
+  is_active:             z.boolean().optional(),
+  is_approved:           z.boolean().optional(),
+  is_deletion_requested: z.boolean().optional(),
+}).refine(
+  (value) =>
+    value.is_active !== undefined ||
+    value.is_approved !== undefined ||
+    value.is_deletion_requested !== undefined,
+  { message: '更新項目がありません' },
+)
 
 export async function PATCH(request: NextRequest) {
   const { error, status, supabase } = await assertAdmin()
@@ -154,7 +202,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 422 })
   }
 
-  const { id, is_active } = result.data
+  const { id, is_active, is_approved, is_deletion_requested } = result.data
 
   // 対象スタッフが管理者でないことを確認（管理者の is_active は変更不可）
   const { data: target } = await supabase
@@ -163,17 +211,57 @@ export async function PATCH(request: NextRequest) {
     .eq('id', id)
     .single()
 
-  if (target?.role === 'admin') {
+  if (target?.role === 'admin' && is_active !== undefined) {
     return NextResponse.json({ error: '管理者アカウントは変更できません' }, { status: 403 })
   }
 
+  const updates: { is_active?: boolean; is_approved?: boolean; is_deletion_requested?: boolean } = {}
+  if (is_active !== undefined) updates.is_active = is_active
+  if (is_approved !== undefined) updates.is_approved = is_approved
+  if (is_deletion_requested !== undefined) updates.is_deletion_requested = is_deletion_requested
+
   const { error: updateError } = await supabase
     .from('profiles')
-    .update({ is_active })
+    .update(updates)
     .eq('id', id)
 
   if (updateError) {
     return NextResponse.json({ error: '更新に失敗しました' }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true })
+}
+
+const deleteSchema = z.object({
+  id: z.string().uuid(),
+})
+
+export async function DELETE(request: NextRequest) {
+  const { error, status, user } = await assertAdmin()
+  if (error || !user) {
+    return NextResponse.json({ error }, { status })
+  }
+
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const result = deleteSchema.safeParse(body)
+  if (!result.success) {
+    return NextResponse.json({ error: 'Invalid input' }, { status: 422 })
+  }
+
+  if (result.data.id === user.id) {
+    return NextResponse.json({ error: '自分自身のアカウントは削除できません' }, { status: 403 })
+  }
+
+  const admin = createServiceRoleClient()
+  const { error: deleteError } = await admin.auth.admin.deleteUser(result.data.id)
+  if (deleteError) {
+    return NextResponse.json({ error: 'アカウント削除に失敗しました' }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true })

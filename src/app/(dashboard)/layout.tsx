@@ -14,11 +14,12 @@ export default async function DashboardLayout({
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, role')
+    .select('full_name, role, is_approved')
     .eq('id', user.id)
     .single()
 
   if (!profile) redirect('/login')
+  if (!profile.is_approved) redirect('/pending')
 
   return (
     // flex を一切使わない — ブロックレイアウト で確実に中央配置

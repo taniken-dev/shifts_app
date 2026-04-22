@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Menu, X, CalendarDays, Users, LayoutList, ClipboardList } from 'lucide-react'
+import { Menu, X, CalendarDays, Users, LayoutList, ClipboardList, UserCircle2 } from 'lucide-react'
 import LogoutButton from './LogoutButton'
 
 interface MobileMenuProps {
@@ -19,9 +19,10 @@ export default function MobileMenu({ isAdmin, fullName }: MobileMenuProps) {
         { href: '/admin/schedule',  icon: <ClipboardList size={17} aria-hidden />, label: 'ワークスケジュール' },
         { href: '/admin/staff',     icon: <Users         size={17} aria-hidden />, label: 'スタッフ管理' },
       ]
-    : [
-        { href: '/staff/shifts', icon: <CalendarDays size={17} aria-hidden />, label: 'シフト希望' },
-      ]
+      : [
+         { href: '/staff/shifts', icon: <CalendarDays size={17} aria-hidden />, label: 'シフト希望' },
+         { href: '/staff/profile', icon: <UserCircle2 size={17} aria-hidden />, label: 'プロフィール' },
+       ]
 
   return (
     <>

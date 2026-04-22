@@ -1,14 +1,27 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginForm() {
-  const [email, setEmail]       = useState('')
+  const searchParams = useSearchParams()
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError]       = useState<string | null>(null)
-  const [loading, setLoading]   = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [lineLoading, setLineLoading] = useState(false)
+
+  useEffect(() => {
+    const authError = searchParams.get('error')
+    if (authError === 'oauth_callback_failed') {
+      setError('LINEログインに失敗しました。もう一度お試しください。')
+    }
+    if (authError === 'email_link_failed') {
+      setError('メールリンクの認証に失敗しました。再度お試しください。')
+    }
+  }, [searchParams])
 
   async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault()
@@ -16,7 +29,7 @@ export default function LoginForm() {
     setLoading(true)
 
     const supabase = createClient()
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    const { error: authError } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     })
@@ -27,26 +40,38 @@ export default function LoginForm() {
       return
     }
 
-    // ロールを取得してリダイレクト先を決定
-    const userId = authData.user?.id
-    let destination = '/staff/shifts'
-
-    if (userId) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .single()
-
-      console.log('[LOGIN] user:', authData.user?.email, '/ role:', profile?.role)
-
-      if (profile?.role === 'admin') {
-        destination = '/admin/shifts'
-      }
-    }
-
-    window.location.href = destination
+    window.location.href = '/dashboard'
   }
+
+  async function handleLineLogin() {
+    setError(null)
+    setLineLoading(true)
+
+    const supabase = createClient()
+    const nextPath = process.env.NEXT_PUBLIC_AUTH_REDIRECT_PATH || '/dashboard'
+    const safeNextPath = nextPath.startsWith('/') ? nextPath : `/${nextPath}`
+    const redirectTo = new URL('/auth/callback', window.location.origin)
+    redirectTo.searchParams.set('next', safeNextPath)
+
+    const { error: authError } = await supabase.auth.signInWithOAuth({
+      // auth-js の OAuth provider 型が custom:* を含まないため、実行時サポートに合わせて指定する
+      provider: 'custom:line' as never,
+      options: {
+        redirectTo: redirectTo.toString(),
+      },
+    })
+
+    if (authError) {
+      setError('LINEログインを開始できませんでした。時間をおいて再度お試しください。')
+      setLineLoading(false)
+    }
+  }
+
+  const isFormDisabled = loading || lineLoading
+  const isSubmitDisabled =
+    isFormDisabled ||
+    !email ||
+    !password
 
   return (
     /* card-elevated: rounded-xl, p-8, 柔らかい影 */
@@ -61,8 +86,77 @@ export default function LoginForm() {
           アカウントにサインイン
         </h2>
         <p className="mt-1 text-sm" style={{ color: 'var(--gray-500)' }}>
-          登録されたメールアドレスとパスワードを入力してください
+          LINEログインが最短です。招待済みスタッフはメールアドレスでもログインできます。
         </p>
+      </div>
+
+      <div>
+        <button
+          type="button"
+          onClick={handleLineLogin}
+          disabled={isFormDisabled}
+          aria-label="LINEでログイン"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            width: '100%',
+            height: '56px',
+            borderRadius: '12px',
+            border: 'none',
+            backgroundColor: isFormDisabled ? '#9ddfb1' : '#06C755',
+            color: '#ffffff',
+            fontSize: '16px',
+            fontWeight: 800,
+            letterSpacing: '-0.01em',
+            cursor: isFormDisabled ? 'not-allowed' : 'pointer',
+            transition: 'all 150ms ease',
+          }}
+        >
+          {lineLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              LINEでログイン中...
+            </>
+          ) : (
+            <>
+              <span
+                aria-hidden
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '6px',
+                  backgroundColor: '#ffffff',
+                  color: '#06C755',
+                  fontSize: '11px',
+                  fontWeight: 900,
+                  lineHeight: 1,
+                }}
+              >
+                LINE
+              </span>
+              LINEでログイン
+            </>
+          )}
+        </button>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          marginTop: '20px',
+          marginBottom: '20px',
+        }}
+      >
+        <div style={{ height: '1px', flex: 1, backgroundColor: 'var(--gray-100)' }} />
+        <span style={{ fontSize: '12px', color: 'var(--gray-400)' }}>または</span>
+        <div style={{ height: '1px', flex: 1, backgroundColor: 'var(--gray-100)' }} />
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="space-y-5">
@@ -83,7 +177,7 @@ export default function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
               className="input-field pl-10"
               placeholder="you@example.com"
-              disabled={loading}
+              disabled={isFormDisabled}
             />
           </div>
         </div>
@@ -104,7 +198,7 @@ export default function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               className="input-field pl-10"
               placeholder="••••••••"
-              disabled={loading}
+              disabled={isFormDisabled}
             />
           </div>
         </div>
@@ -121,7 +215,7 @@ export default function LoginForm() {
         <div className="pt-1">
           <button
             type="submit"
-            disabled={loading || !email || !password}
+            disabled={isSubmitDisabled}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -133,9 +227,9 @@ export default function LoginForm() {
               borderRadius: '12px',
               fontSize: '14px',
               fontWeight: 700,
-              cursor: loading || !email || !password ? 'not-allowed' : 'pointer',
-              backgroundColor: loading || !email || !password ? '#e5e7eb' : '#374151',
-              color: loading || !email || !password ? '#9ca3af' : '#ffffff',
+              cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
+              backgroundColor: isSubmitDisabled ? '#e5e7eb' : '#374151',
+              color: isSubmitDisabled ? '#9ca3af' : '#ffffff',
               border: 'none',
               letterSpacing: '-0.01em',
               transition: 'all 150ms ease',
@@ -157,7 +251,7 @@ export default function LoginForm() {
       {/* フッター区切り */}
       <div className="mt-8 pt-6" style={{ borderTop: '1px solid var(--gray-100)' }}>
         <p className="text-center text-xs" style={{ color: 'var(--gray-400)' }}>
-          パスワードを忘れた場合は管理者にお問い合わせください
+          LINEログイン・メールログインのどちらでも、同一の Supabase ユーザーID を基準にプロフィール管理されます
         </p>
       </div>
     </div>
