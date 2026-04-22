@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { CalendarDays, Users, LayoutList } from 'lucide-react'
+import { CalendarDays, Users, LayoutList, ClipboardList } from 'lucide-react'
 import type { Role } from '@/types/database'
 import LogoutButton from './LogoutButton'
 import MobileMenu from './MobileMenu'
@@ -74,6 +74,9 @@ export default function NavBar({ fullName, role }: NavBarProps) {
             <>
               <NavLink href="/admin/shifts" icon={<LayoutList size={14} aria-hidden />}>
                 シフト一覧
+              </NavLink>
+              <NavLink href="/admin/schedule" icon={<ClipboardList size={14} aria-hidden />}>
+                ワークスケジュール
               </NavLink>
               <NavLink href="/admin/staff" icon={<Users size={14} aria-hidden />}>
                 スタッフ管理

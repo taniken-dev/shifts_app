@@ -9,6 +9,10 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import type { Profile, ShiftWithProfile, ShiftStatus } from '@/types/database'
 import { calcDeadline, formatDeadline, BYPASS_DEADLINE } from '@/lib/utils/deadline'
+import {
+  TIME_SEGMENTS, countStaffForSegment, getSegmentTarget, getSufficiencyStatus,
+  isHolidayOrWeekend,
+} from '@/lib/utils/shift-calculator'
 import { Toast } from '@/components/ui/Toast'
 import WorkScheduleExportButton from './WorkScheduleExportButton'
 
@@ -18,16 +22,11 @@ type Period = 'first' | 'second'
 
 const DOW_JA = ['日', '月', '火', '水', '木', '金', '土'] as const
 
-const TIME_SLOTS = [
-  { key: 'lunch',  label: 'ランチ (11〜15時)',  start: '11:00', end: '15:00' },
-  { key: 'dinner', label: 'ディナー (17〜21時)', start: '17:00', end: '21:00' },
+// CSVエクスポート用（従来の2スロット）
+const CSV_SLOTS = [
+  { label: 'ランチ (11〜15時)',  start: '11:00', end: '15:00' },
+  { label: 'ディナー (17〜21時)', start: '17:00', end: '21:00' },
 ] as const
-
-// 時間帯ごとの目標人数（必要に応じて変更）
-const SLOT_TARGETS: Record<string, number> = {
-  lunch:  3,
-  dinner: 4,
-}
 
 // ポジション定義
 const POSITIONS = [
@@ -87,10 +86,11 @@ function escapeCSV(v: string): string {
 export default function ShiftMatrix({
   staff, shifts: initialShifts, dates, month, period,
 }: ShiftMatrixProps) {
-  const [localShifts,  setLocalShifts]  = useState<ShiftWithProfile[]>(initialShifts)
-  const [bulkWorking,  setBulkWorking]  = useState(false)
-  const [toastMsg,     setToastMsg]     = useState<string | null>(null)
-  const [showSummary,  setShowSummary]  = useState(true)
+  const [localShifts,      setLocalShifts]      = useState<ShiftWithProfile[]>(initialShifts)
+  const [bulkWorking,      setBulkWorking]      = useState(false)
+  const [toastMsg,         setToastMsg]         = useState<string | null>(null)
+  const [showSummary,      setShowSummary]      = useState(true)
+  const [includeSubmitted, setIncludeSubmitted] = useState(true)
 
   // 調整ポップオーバー
   const [popoverShift,    setPopoverShift]    = useState<ShiftWithProfile | null>(null)
@@ -126,7 +126,7 @@ export default function ShiftMatrix({
   function openPopover(shift: ShiftWithProfile) {
     setPopoverShift(shift)
     setPopoverStart(shift.start_time.slice(0, 5))
-    setPopoverEnd(shift.end_time.slice(0, 5))
+    setPopoverEnd(  shift.end_time.slice(0, 5))
     setPopoverPosition(shift.position ?? '')
     setPopoverWorking(false)
   }
@@ -260,7 +260,7 @@ export default function ShiftMatrix({
           : '—'
       }),
     ])
-    const summaryRows = TIME_SLOTS.map(slot => [
+    const summaryRows = CSV_SLOTS.map(slot => [
       slot.label,
       ...dates.map(d => String(localShifts.filter(
         sh => sh.shift_date === d && sh.start_time < slot.end && sh.end_time > slot.start,
@@ -451,9 +451,9 @@ export default function ShiftMatrix({
           backgroundColor: '#ffffff', borderRadius: '18px',
           border: '1px solid #f1f5f9',
           boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 4px 16px rgba(0,0,0,0.03)',
-          overflow: 'hidden',
+          overflow: 'clip',
         }}>
-          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 300px)' }}>
+          <div style={{ overflowX: 'auto' }}>
             <MatrixTable
               staff={staff}
               dates={dates}
@@ -466,26 +466,46 @@ export default function ShiftMatrix({
 
       {/* ── 人員充足サマリー（トグル） ── */}
       <div>
-        <button
-          type="button"
-          onClick={() => setShowSummary(v => !v)}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            padding: '7px 14px', borderRadius: '9999px',
-            backgroundColor: showSummary ? '#f3f4f6' : '#ffffff',
-            color: '#374151',
-            fontSize: '12px', fontWeight: 700,
-            border: '1.5px solid #e5e7eb', cursor: 'pointer',
-            transition: 'all 150ms ease',
-            marginBottom: showSummary ? '10px' : '0',
-          }}
-        >
-          {showSummary
-            ? <ChevronUp size={12} aria-hidden />
-            : <ChevronDown size={12} aria-hidden />
-          }
-          人員充足サマリー
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: showSummary ? '10px' : '0' }}>
+          <button
+            type="button"
+            onClick={() => setShowSummary(v => !v)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '7px 14px', borderRadius: '9999px',
+              backgroundColor: showSummary ? '#f3f4f6' : '#ffffff',
+              color: '#374151',
+              fontSize: '12px', fontWeight: 700,
+              border: '1.5px solid #e5e7eb', cursor: 'pointer',
+              transition: 'all 150ms ease',
+            }}
+          >
+            {showSummary
+              ? <ChevronUp size={12} aria-hidden />
+              : <ChevronDown size={12} aria-hidden />
+            }
+            人員充足サマリー
+          </button>
+
+          {showSummary && (
+            <button
+              type="button"
+              onClick={() => setIncludeSubmitted(v => !v)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '5px',
+                padding: '6px 12px', borderRadius: '9999px',
+                backgroundColor: includeSubmitted ? '#eff6ff' : '#ffffff',
+                color: includeSubmitted ? '#1d4ed8' : '#6b7280',
+                fontSize: '11px', fontWeight: 700,
+                border: `1.5px solid ${includeSubmitted ? '#bfdbfe' : '#e5e7eb'}`,
+                cursor: 'pointer', transition: 'all 150ms ease',
+              }}
+            >
+              {includeSubmitted ? '申請中を含む（シミュレーション）' : '承認済みのみ'}
+            </button>
+          )}
+
+        </div>
 
         {showSummary && (
           <div style={{
@@ -494,7 +514,11 @@ export default function ShiftMatrix({
             border: '1px solid #f1f5f9',
             boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
           }}>
-            <SummaryTable dates={dates} localShifts={localShifts} />
+            <SummaryTable
+              dates={dates}
+              localShifts={localShifts}
+              includeSubmitted={includeSubmitted}
+            />
           </div>
         )}
       </div>
@@ -506,7 +530,6 @@ export default function ShiftMatrix({
           { bg: '#f0fdf4', border: '#bbf7d0', label: '承認済み' },
           { bg: '#fff1f2', border: '#fecdd3', label: '却下' },
           { bg: '#f9fafb', border: '#e5e7eb', label: '未提出' },
-          { bg: '#fff1f1', border: '#fca5a5', label: '人員不足（目標未達）' },
         ].map(item => (
           <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <div style={{
@@ -520,30 +543,46 @@ export default function ShiftMatrix({
           <span style={{ fontSize: '11px', color: '#0284c7', fontWeight: 600 }}>✎</span>
           <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 500 }}>店長により時間調整済み</span>
         </div>
+        <div style={{ width: '1px', backgroundColor: '#e5e7eb', margin: '0 2px' }} />
+        {[
+          { bg: '#fee2e2', border: '#fca5a5', label: 'サマリー：人員不足' },
+          { bg: '#f0fdf4', border: '#bbf7d0', label: 'サマリー：人員適正' },
+          { bg: '#fef9c3', border: '#fde047', label: 'サマリー：人員過剰' },
+        ].map(item => (
+          <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div style={{
+              width: '12px', height: '12px', borderRadius: '3px',
+              backgroundColor: item.bg, border: `1.5px solid ${item.border}`, flexShrink: 0,
+            }} />
+            <span style={{ fontSize: '11px', color: '#6b7280', fontWeight: 500 }}>{item.label}</span>
+          </div>
+        ))}
       </div>
 
       {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
 
       {/* ── 調整ポップオーバー ── */}
-      {popoverShift && (
-        <AdjustPopover
-          shift={popoverShift}
-          startTime={popoverStart}
-          endTime={popoverEnd}
-          position={popoverPosition}
-          working={popoverWorking}
-          timesChanged={timesChanged}
-          isBeforeDeadline={isBeforeDeadline}
-          deadlineLabel={formatDeadline(deadline)}
-          onStartChange={setPopoverStart}
-          onEndChange={setPopoverEnd}
-          onPositionChange={setPopoverPosition}
-          onApprove={handlePopoverApprove}
-          onReject={handlePopoverReject}
-          onAdjustApprove={handleAdjustApprove}
-          onClose={closePopover}
-        />
-      )}
+      {popoverShift && (() => {
+        return (
+          <AdjustPopover
+            shift={popoverShift}
+            startTime={popoverStart}
+            endTime={popoverEnd}
+            position={popoverPosition}
+            working={popoverWorking}
+            timesChanged={timesChanged}
+            isBeforeDeadline={isBeforeDeadline}
+            deadlineLabel={formatDeadline(deadline)}
+            onStartChange={setPopoverStart}
+            onEndChange={setPopoverEnd}
+            onPositionChange={setPopoverPosition}
+            onApprove={handlePopoverApprove}
+            onReject={handlePopoverReject}
+            onAdjustApprove={handleAdjustApprove}
+            onClose={closePopover}
+          />
+        )
+      })()}
     </div>
   )
 }
@@ -559,8 +598,8 @@ interface MatrixTableProps {
 
 function MatrixTable({ staff, dates, shiftMap, onCellClick }: MatrixTableProps) {
   const stickyLeft:   React.CSSProperties = { position: 'sticky', left: 0, zIndex: 5 }
-  const stickyTop:    React.CSSProperties = { position: 'sticky', top: 0, zIndex: 8 }
-  const stickyCorner: React.CSSProperties = { position: 'sticky', top: 0, left: 0, zIndex: 20 }
+  const stickyTop:    React.CSSProperties = { position: 'sticky', top: 52, zIndex: 8 }
+  const stickyCorner: React.CSSProperties = { position: 'sticky', top: 52, left: 0, zIndex: 20 }
 
   return (
     <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: 'max-content', minWidth: '100%' }}>
@@ -569,11 +608,12 @@ function MatrixTable({ staff, dates, shiftMap, onCellClick }: MatrixTableProps) 
           <th style={{
             ...stickyCorner,
             backgroundColor: '#f9fafb',
-            padding: '14px 20px',
+            padding: '10px 20px',
             fontSize: '11px', fontWeight: 700, color: '#6b7280',
             textTransform: 'uppercase', letterSpacing: '0.06em',
             borderBottom: '2px solid #e5e7eb', borderRight: '1px solid #e5e7eb',
-            minWidth: '164px', textAlign: 'left', whiteSpace: 'nowrap',
+            minWidth: '152px', textAlign: 'left', whiteSpace: 'nowrap',
+            boxShadow: '2px 0 6px rgba(0,0,0,0.05)',
           }}>
             スタッフ
           </th>
@@ -588,19 +628,20 @@ function MatrixTable({ staff, dates, shiftMap, onCellClick }: MatrixTableProps) 
               <th key={d} style={{
                 ...stickyTop,
                 backgroundColor: isSun ? '#fef7f7' : isSat ? '#f6f9ff' : '#f9fafb',
-                padding: '8px 4px', minWidth: '82px',
+                padding: '6px 4px', minWidth: '80px',
                 textAlign: 'center',
                 borderBottom: '2px solid #e5e7eb', borderRight: '1px solid #eef0f3',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.06)',
               }}>
                 <div style={{
-                  fontSize: '17px', fontWeight: 800, lineHeight: 1,
+                  fontSize: '15px', fontWeight: 800, lineHeight: 1,
                   fontVariantNumeric: 'tabular-nums',
                   color: isSun ? '#d44' : isSat ? '#46a' : '#374151',
                 }}>
                   {date.getDate()}
                 </div>
                 <div style={{
-                  fontSize: '10px', fontWeight: 600, marginTop: '2px',
+                  fontSize: '9px', fontWeight: 600, marginTop: '2px',
                   color: isSun ? '#d44' : isSat ? '#46a' : '#9ca3af',
                 }}>
                   {DOW_JA[dow]}
@@ -619,14 +660,15 @@ function MatrixTable({ staff, dates, shiftMap, onCellClick }: MatrixTableProps) 
               <td style={{
                 ...stickyLeft,
                 backgroundColor: rowBg,
-                padding: '12px 20px',
+                padding: '6px 16px',
                 borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #e5e7eb',
                 whiteSpace: 'nowrap',
+                boxShadow: '2px 0 6px rgba(0,0,0,0.05)',
               }}>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827' }}>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#111827' }}>
                   {s.full_name}
                 </div>
-                <div style={{ fontSize: '10px', color: '#b0b8c4', marginTop: '2px', fontVariantNumeric: 'tabular-nums' }}>
+                <div style={{ fontSize: '9px', color: '#b0b8c4', marginTop: '1px', fontVariantNumeric: 'tabular-nums' }}>
                   {s.staff_code}
                 </div>
               </td>
@@ -656,10 +698,10 @@ function MatrixTable({ staff, dates, shiftMap, onCellClick }: MatrixTableProps) 
 // ── シフトセル ────────────────────────────────────────────────────────────────
 
 interface ShiftCellProps {
-  shift?:  ShiftWithProfile
-  rowBg:   string
-  isSun:   boolean
-  isSat:   boolean
+  shift?:   ShiftWithProfile
+  rowBg:    string
+  isSun:    boolean
+  isSat:    boolean
   onClick?: () => void
 }
 
@@ -671,9 +713,9 @@ function ShiftCell({ shift, rowBg, isSun, isSat, onClick }: ShiftCellProps) {
     : null
 
   const base: React.CSSProperties = {
-    padding: '8px 4px', textAlign: 'center',
+    padding: '5px 4px', textAlign: 'center',
     borderBottom: '1px solid #f3f4f6', borderRight: '1px solid #eef0f3',
-    minWidth: '82px', verticalAlign: 'middle',
+    minWidth: '80px', verticalAlign: 'middle',
     cursor: shift ? 'pointer' : 'default',
     transition: 'background-color 100ms ease',
     userSelect: 'none',
@@ -681,7 +723,7 @@ function ShiftCell({ shift, rowBg, isSun, isSat, onClick }: ShiftCellProps) {
 
   if (!shift) {
     return (
-      <td style={{ ...base, backgroundColor: weekendTint ?? rowBg }}>
+      <td style={{ ...base, backgroundColor: weekendTint ?? rowBg, outline: 'none' }}>
         <span style={{ fontSize: '13px', color: '#e0e3e8' }}>—</span>
       </td>
     )
@@ -701,7 +743,7 @@ function ShiftCell({ shift, rowBg, isSun, isSat, onClick }: ShiftCellProps) {
         <div style={{ fontSize: '11px', fontWeight: 700, color: '#065f46', lineHeight: 1.4, letterSpacing: '-0.01em' }}>
           {timeStr}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', marginTop: '4px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', marginTop: '2px' }}>
           {shift.position && (
             <span style={{
               fontSize: '10px', fontWeight: 800,
@@ -758,7 +800,7 @@ function ShiftCell({ shift, rowBg, isSun, isSat, onClick }: ShiftCellProps) {
         {timeStr}
       </div>
       <span style={{
-        display: 'inline-block', marginTop: '5px',
+        display: 'inline-block', marginTop: '4px',
         fontSize: '9px', fontWeight: 600, color: '#3b82f6',
         backgroundColor: '#dbeafe', borderRadius: '4px', padding: '1px 6px',
       }}>
@@ -770,16 +812,23 @@ function ShiftCell({ shift, rowBg, isSun, isSat, onClick }: ShiftCellProps) {
 
 // ── サマリーテーブル ──────────────────────────────────────────────────────────
 
+const SUFFICIENCY_STYLES = {
+  shortage: { bg: '#fee2e2', color: '#ef4444', label: '⚠ 不足' },
+  ok:       { bg: '#f0fdf4', color: '#059669', label: '✓ 適正' },
+  excess:   { bg: '#fef9c3', color: '#d97706', label: '+ 過剰' },
+} as const
+
 interface SummaryTableProps {
-  dates:       string[]
-  localShifts: ShiftWithProfile[]
+  dates:            string[]
+  localShifts:      ShiftWithProfile[]
+  includeSubmitted: boolean
 }
 
-function SummaryTable({ dates, localShifts }: SummaryTableProps) {
-  // shift.position を直接使ってグループ集計
+function SummaryTable({ dates, localShifts, includeSubmitted }: SummaryTableProps) {
   const assignedPositions = [...new Set(localShifts.map(s => s.position).filter(Boolean))] as string[]
   const frontPositions   = assignedPositions.filter(p => (POSITION_GROUPS.front   as readonly string[]).includes(p))
   const kitchenPositions = assignedPositions.filter(p => (POSITION_GROUPS.kitchen as readonly string[]).includes(p))
+
   return (
     <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: 'max-content', minWidth: '100%' }}>
       <thead>
@@ -787,7 +836,7 @@ function SummaryTable({ dates, localShifts }: SummaryTableProps) {
           <th style={{
             position: 'sticky', left: 0,
             backgroundColor: '#f9fafb',
-            padding: '11px 20px', minWidth: '164px',
+            padding: '11px 20px', minWidth: '170px',
             textAlign: 'left', fontSize: '11px', fontWeight: 700, color: '#6b7280',
             textTransform: 'uppercase', letterSpacing: '0.06em',
             borderBottom: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb',
@@ -796,55 +845,63 @@ function SummaryTable({ dates, localShifts }: SummaryTableProps) {
             時間帯
           </th>
           {dates.map(d => {
-            const date  = new Date(d + 'T00:00:00')
-            const dow   = date.getDay()
-            const isSun = dow === 0
-            const isSat = dow === 6
+            const date   = new Date(d + 'T00:00:00')
+            const dow    = date.getDay()
+            const isSun  = dow === 0
+            const isSat  = dow === 6
+            const isHol  = !isSun && !isSat && isHolidayOrWeekend(d)
             return (
               <th key={d} style={{
-                backgroundColor: isSun ? '#fef7f7' : isSat ? '#f6f9ff' : '#f9fafb',
-                padding: '8px 4px', minWidth: '82px', textAlign: 'center',
-                fontSize: '12px', fontWeight: 700,
-                color: isSun ? '#d44' : isSat ? '#46a' : '#6b7280',
+                backgroundColor: isSun ? '#fef7f7' : (isSat || isHol) ? '#f6f9ff' : '#f9fafb',
+                padding: '6px 4px', minWidth: '82px', textAlign: 'center',
                 borderBottom: '1px solid #e5e7eb', borderRight: '1px solid #eef0f3',
               }}>
-                {date.getDate()}
+                <div style={{
+                  fontSize: '15px', fontWeight: 800, lineHeight: 1,
+                  color: isSun ? '#d44' : (isSat || isHol) ? '#46a' : '#374151',
+                }}>
+                  {date.getDate()}
+                </div>
+                {isHol && (
+                  <div style={{ fontSize: '9px', fontWeight: 700, color: '#7c3aed', marginTop: '2px' }}>祝</div>
+                )}
               </th>
             )
           })}
         </tr>
       </thead>
       <tbody>
-        {TIME_SLOTS.map((slot, si) => (
-          <tr key={slot.key}>
+        {TIME_SEGMENTS.map((seg, si) => (
+          <tr key={seg.key}>
             <td style={{
               position: 'sticky', left: 0,
-              backgroundColor: si === 0 ? '#f8fafc' : '#f5f8fc',
-              padding: '13px 20px',
-              borderBottom: si < TIME_SLOTS.length - 1 ? '1px solid #e5e7eb' : 'none',
+              backgroundColor: si % 2 === 0 ? '#f8fafc' : '#f5f8fc',
+              padding: '12px 20px',
+              borderBottom: si < TIME_SEGMENTS.length - 1 ? '1px solid #e5e7eb' : 'none',
               borderRight: '1px solid #d1d5db',
               whiteSpace: 'nowrap',
             }}>
-              <div style={{ fontSize: '12px', fontWeight: 700, color: '#374151' }}>{slot.label}</div>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: '#374151' }}>{seg.label}</div>
+              <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '1px' }}>
+                {seg.start}〜{seg.end === '24:00' ? '翌0:00' : seg.end}
+              </div>
             </td>
             {dates.map(d => {
-              const target = SLOT_TARGETS[slot.key] ?? 3
-              const count  = localShifts.filter(
-                sh => sh.shift_date === d && sh.start_time < slot.end && sh.end_time > slot.start,
-              ).length
-              const isEmpty = count === 0
-              const isWarn  = count > 0 && count < target
+              const target = getSegmentTarget(seg.key, d)
+              const count  = countStaffForSegment(localShifts, d, seg, includeSubmitted)
+              const status = getSufficiencyStatus(count, target)
+              const style  = SUFFICIENCY_STYLES[status]
 
               return (
                 <td key={d} style={{
-                  textAlign: 'center', padding: '10px 4px',
-                  borderBottom: si < TIME_SLOTS.length - 1 ? '1px solid #e5e7eb' : 'none',
+                  textAlign: 'center', padding: '9px 4px',
+                  borderBottom: si < TIME_SEGMENTS.length - 1 ? '1px solid #e5e7eb' : 'none',
                   borderRight: '1px solid #eef0f3',
-                  backgroundColor: isEmpty ? '#fee2e2' : isWarn ? '#fff7ed' : '#f0fdf4',
+                  backgroundColor: count === 0 && target > 0 ? '#fee2e2' : style.bg,
                 }}>
                   <span style={{
                     fontSize: '20px', fontWeight: 800, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
-                    color: isEmpty ? '#ef4444' : isWarn ? '#d97706' : '#059669',
+                    color: count === 0 && target > 0 ? '#ef4444' : style.color,
                   }}>
                     {count}
                   </span>
@@ -853,9 +910,9 @@ function SummaryTable({ dates, localShifts }: SummaryTableProps) {
                   </span>
                   <span style={{
                     display: 'block', fontSize: '9px', fontWeight: 700, marginTop: '1px',
-                    color: isEmpty ? '#ef4444' : isWarn ? '#d97706' : '#059669',
+                    color: count === 0 && target > 0 ? '#ef4444' : style.color,
                   }}>
-                    {isEmpty ? '✕ 0名' : isWarn ? '⚠ 不足' : '✓ 充足'}
+                    {count === 0 && target > 0 ? '✕ 0名' : style.label}
                   </span>
                 </td>
               )
@@ -1013,7 +1070,7 @@ function AdjustPopover({
           backgroundColor: '#f5f5f7', border: '1px solid #ebebeb',
         }}>
           <p style={{ fontSize: '10px', fontWeight: 700, color: '#9ca3af', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            スタッフ希望
+            スタッフ希望枠（Availability）
           </p>
           <p style={{ fontSize: '16px', fontWeight: 800, color: '#374151', margin: 0, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
             {shift.start_time.slice(0, 5)} 〜 {shift.end_time.slice(0, 5)}

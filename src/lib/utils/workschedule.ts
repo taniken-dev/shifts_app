@@ -9,12 +9,13 @@ import ExcelJS from 'exceljs'
 
 const START_HOUR = 7
 const END_HOUR   = 22
+const A4_TOTAL_WIDTH_CHARS = 108
 
 // 色定数 (ARGB)
 const YELLOW      = 'FFFFFF00'  // シフト塗りつぶし
-const HEADER_BG   = 'FFF2F2F2'  // ヘッダー行背景
-const TITLE_BG    = 'FFE8F5E9'  // タイトル行背景（薄緑）
-const BORDER_CLR  = 'FFB8B8B8'  // 罫線色
+const HEADER_BG   = 'FFFFFFFF'  // ヘッダー行背景
+const TITLE_BG    = 'FFFFFFFF'  // タイトル行背景
+const BORDER_CLR  = 'FF9CA3AF'  // 罫線色
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -87,7 +88,7 @@ function addDaySheet(
     if (s.status === 'approved') shiftMap.set(s.profile_id, s)
   }
 
-  // 出勤スタッフのみに絞る
+  // 確定シフト（approved）のあるスタッフのみ行として表示
   const activeStaff = staff.filter(m => shiftMap.has(m.id))
 
   // approved シフトに :30 の境界があれば 30分刻み、なければ 1時間刻み
@@ -104,8 +105,9 @@ function addDaySheet(
       orientation: 'landscape',
       fitToPage:   true,
       fitToWidth:  1,
-      fitToHeight: 1,
-      margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 },
+      fitToHeight: 0,
+      horizontalCentered: true,
+      margins: { left: 0.35, right: 0.35, top: 0.55, bottom: 0.55, header: 0.25, footer: 0.25 },
     },
     headerFooter: {
       oddHeader: `&C&"游ゴシック,Bold"ワークスケジュール表　${dateLabel}`,
@@ -114,13 +116,21 @@ function addDaySheet(
   ws.views = [{ showGridLines: false }]
 
   // ---- 列幅 ----
-  ws.getColumn(1).width = 9
-  const slotColWidth = slotMinutes === 30 ? 1.55 : 3.0
-  for (let i = 2; i <= totalSlots + 1; i++) {
+  const nameColWidth = 14
+  ws.getColumn(1).width = nameColWidth
+  const minSlotWidth = slotMinutes === 30 ? 2.4 : 4.8
+  const slotColWidth = Math.max(
+    minSlotWidth,
+    (A4_TOTAL_WIDTH_CHARS - nameColWidth * 2) / totalSlots,
+  )
+  // 左側の氏名列幅に近い分だけ右側へ空列を追加して、左右余白の見え方を対称に近づける
+  const extraRightSlots = Math.max(1, Math.round(nameColWidth / slotColWidth))
+  const totalCols = totalSlots + extraRightSlots
+  for (let i = 2; i <= totalCols + 1; i++) {
     ws.getColumn(i).width = slotColWidth
   }
 
-  const midCol = Math.floor(totalSlots / 2) + 1
+  const midCol = Math.floor(totalCols / 2) + 1
 
   // ---- 行1: タイトル ----
   const r1 = ws.getRow(1)
@@ -129,15 +139,15 @@ function addDaySheet(
   ws.mergeCells(1, 1, 1, midCol - 1)
   const t1 = ws.getCell(1, 1)
   t1.value     = 'ワークスケジュール表'
-  t1.font      = { bold: true, size: 12, color: { argb: 'FF1A1A1A' } }
+  t1.font      = { bold: true, size: 10, color: { argb: 'FF1A1A1A' } }
   t1.alignment = { horizontal: 'center', vertical: 'middle' }
   t1.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: TITLE_BG } }
   t1.border    = border()
 
-  ws.mergeCells(1, midCol, 1, totalSlots + 1)
+  ws.mergeCells(1, midCol, 1, totalCols + 1)
   const t2 = ws.getCell(1, midCol)
   t2.value     = dateLabel
-  t2.font      = { bold: true, size: 11, color: { argb: 'FF1A1A1A' } }
+  t2.font      = { bold: true, size: 10, color: { argb: 'FF1A1A1A' } }
   t2.alignment = { horizontal: 'right', vertical: 'middle' }
   t2.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: TITLE_BG } }
   t2.border    = border()
@@ -147,8 +157,8 @@ function addDaySheet(
   r2.height = 15
 
   const nh = ws.getCell(2, 1)
-  nh.value     = '氏名'
-  nh.font      = { bold: true, size: 8 }
+  nh.value     = ''
+  nh.font      = { bold: true, size: 9 }
   nh.alignment = { horizontal: 'center', vertical: 'middle' }
   nh.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } }
   nh.border    = border()
@@ -159,38 +169,53 @@ function addDaySheet(
     if (colsPerHour > 1) ws.mergeCells(2, colStart, 2, colEnd)
     const hc     = ws.getCell(2, colStart)
     hc.value     = hour
-    hc.font      = { bold: true, size: 8 }
+    hc.font      = { bold: true, size: 9 }
     hc.alignment = { horizontal: 'center', vertical: 'middle' }
     hc.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } }
     hc.border    = border()
   }
+  for (let col = totalSlots + 2; col <= totalCols + 1; col++) {
+    const c = ws.getCell(2, col)
+    c.value = ''
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } }
+    c.border = border()
+  }
 
-  // ---- 行3〜: 出勤スタッフ行のみ ----
+  // ---- 行3〜: スタッフ行（1人あたり「名前行 + 空白行」） ----
   activeStaff.forEach((member, idx) => {
-    const rowNum = idx + 3
-    const row    = ws.getRow(rowNum)
-    row.height   = 15
+    const nameRowNum   = idx * 2 + 3
+    const spacerRowNum = nameRowNum + 1
+    const nameRow      = ws.getRow(nameRowNum)
+    const spacerRow    = ws.getRow(spacerRowNum)
+    nameRow.height     = 15
+    spacerRow.height   = 15
 
-    const nc     = ws.getCell(rowNum, 1)
+    const nc     = ws.getCell(nameRowNum, 1)
     nc.value     = member.full_name
     nc.font      = { size: 9 }
     nc.alignment = { horizontal: 'left', vertical: 'middle' }
     nc.border    = border()
+    const ncSpacer = ws.getCell(spacerRowNum, 1)
+    ncSpacer.value = ''
+    ncSpacer.border = border()
 
     const shift    = shiftMap.get(member.id)!
     const startMin = toMinutes(shift.start_time)
     const endMin   = toMinutes(shift.end_time)
 
-    for (let slotIdx = 0; slotIdx < totalSlots; slotIdx++) {
-      const sc  = ws.getCell(rowNum, slotIdx + 2)
-      sc.border = border()
-      if (slotCovered(slotIdx, startMin, endMin, slotMinutes)) {
-        sc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: YELLOW } }
+    for (let slotIdx = 0; slotIdx < totalCols; slotIdx++) {
+      const nameCell   = ws.getCell(nameRowNum, slotIdx + 2)
+      const spacerCell = ws.getCell(spacerRowNum, slotIdx + 2)
+      nameCell.border = border()
+      spacerCell.border = border()
+      if (slotIdx < totalSlots && slotCovered(slotIdx, startMin, endMin, slotMinutes)) {
+        nameCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: YELLOW } }
       }
     }
   })
 
-  ws.pageSetup.printArea = `A1:${columnLetter(totalSlots + 1)}${activeStaff.length + 2}`
+  const lastRow = activeStaff.length > 0 ? activeStaff.length * 2 + 2 : 2
+  ws.pageSetup.printArea = `A1:${columnLetter(totalCols + 1)}${lastRow}`
 }
 
 /** 列番号 → Excel 列文字 (1→A, 27→AA …) */

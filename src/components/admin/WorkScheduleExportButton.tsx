@@ -3,31 +3,50 @@
 import { useState } from 'react'
 import { FileSpreadsheet, Loader2 } from 'lucide-react'
 
-interface WorkScheduleExportButtonProps {
-  month:  string              // "YYYY-MM"
-  period: 'first' | 'second'  // 前半 or 後半
-}
+type WorkScheduleExportButtonProps =
+  | {
+      date: string                 // "YYYY-MM-DD"（1日1シート）
+      month?: never
+      period?: never
+    }
+  | {
+      month:  string               // "YYYY-MM"
+      period: 'first' | 'second'   // 前半 or 後半（期間まとめ）
+      date?: never
+    }
 
 /**
- * 前半 or 後半まとめてワークスケジュール表 (.xlsx) をダウンロードするボタン。
- * 管理者専用。1ファイル・日付ごとにシートが分かれた構成で出力される。
+ * ワークスケジュール表 (.xlsx) ダウンロードボタン。
+ * - month + period 指定: 半月ぶんを1ファイル（日付ごとにシート分割）
+ * - date 指定: その日付1シートのみ
  */
 export default function WorkScheduleExportButton({
+  date,
   month,
   period,
 }: WorkScheduleExportButtonProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState<string | null>(null)
 
-  const [, m] = month.split('-').map(Number)
-  const periodLabel = period === 'first' ? '前半（1〜15日）' : '後半（16〜末日）'
-  const filename    = `workschedule_${month}_${period === 'first' ? '前半' : '後半'}.xlsx`
+  const isSingleDay = Boolean(date)
+  const [, m] = isSingleDay ? [0, 0] : month.split('-').map(Number)
+  const periodLabel = isSingleDay
+    ? ''
+    : period === 'first' ? '前半（1〜15日）' : '後半（16〜末日）'
+  const filename = isSingleDay
+    ? `workschedule_${date}.xlsx`
+    : `workschedule_${month}_${period === 'first' ? '前半' : '後半'}.xlsx`
+  const title = isSingleDay
+    ? `${date} のワークスケジュール表を Excel でダウンロード（1シート）`
+    : `${m}月${periodLabel}のワークスケジュール表を Excel でダウンロード（日付ごとにシートを分けた1ファイル）`
 
   async function handleExport() {
     setLoading(true)
     setError(null)
     try {
-      const url = `/api/export/xlsx?month=${encodeURIComponent(month)}&period=${period}`
+      const url = isSingleDay
+        ? `/api/export/xlsx?date=${encodeURIComponent(date)}`
+        : `/api/export/xlsx?month=${encodeURIComponent(month)}&period=${period}`
       const res = await fetch(url)
 
       if (!res.ok) {
@@ -57,7 +76,7 @@ export default function WorkScheduleExportButton({
         type="button"
         onClick={handleExport}
         disabled={loading}
-        title={`${m}月${periodLabel}のワークスケジュール表を Excel でダウンロード（日付ごとにシートを分けた1ファイル）`}
+        title={title}
         style={{
           display: 'inline-flex', alignItems: 'center', gap: '6px',
           padding: '10px 18px', borderRadius: '10px', minHeight: '44px',
