@@ -29,7 +29,7 @@ export default function WorkScheduleExportButton({
   const [error, setError]     = useState<string | null>(null)
 
   const isSingleDay = Boolean(date)
-  const [, m] = isSingleDay ? [0, 0] : month.split('-').map(Number)
+  const [, m] = isSingleDay ? [0, 0] : month!.split('-').map(Number)
   const periodLabel = isSingleDay
     ? ''
     : period === 'first' ? '前半（1〜15日）' : '後半（16〜末日）'
@@ -45,8 +45,8 @@ export default function WorkScheduleExportButton({
     setError(null)
     try {
       const url = isSingleDay
-        ? `/api/export/xlsx?date=${encodeURIComponent(date)}`
-        : `/api/export/xlsx?month=${encodeURIComponent(month)}&period=${period}`
+        ? `/api/export/xlsx?date=${encodeURIComponent(date!)}`
+        : `/api/export/xlsx?month=${encodeURIComponent(month!)}&period=${period}`
       const res = await fetch(url)
 
       if (!res.ok) {
