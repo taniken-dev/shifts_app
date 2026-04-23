@@ -58,7 +58,9 @@ export async function GET(request: NextRequest) {
   const tokenHash = requestUrl.searchParams.get('token_hash')
   const type = requestUrl.searchParams.get('type')
   const next = requestUrl.searchParams.get('next') ?? '/dashboard'
-  const destination = next.startsWith('/') ? next : '/dashboard'
+
+  // 招待リンクはパスワード未設定なので設定ページへ誘導
+  const destination = type === 'invite' ? '/auth/set-password' : (next.startsWith('/') ? next : '/dashboard')
   const destinationUrl = new URL(destination, requestUrl.origin)
 
   let response = NextResponse.redirect(destinationUrl)

@@ -28,21 +28,26 @@ export default function UserProfileEditor({
     if (!confirmed) return
 
     setLoading(true)
-    const res = await fetch('/api/staff/profile', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'request_deletion' }),
-    })
-    const json = await res.json()
-    setLoading(false)
+    try {
+      const res = await fetch('/api/staff/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'request_deletion' }),
+      })
+      const json = await res.json().catch(() => ({}))
 
-    if (!res.ok) {
-      setToastMsg(json.error ?? '退会申請に失敗しました')
-      return
+      if (!res.ok) {
+        setToastMsg(typeof json.error === 'string' ? json.error : '退会申請に失敗しました')
+        return
+      }
+
+      setPending(true)
+      setToastMsg('退会申請を受け付けました。管理者による削除をお待ちください。')
+    } catch {
+      setToastMsg('退会申請に失敗しました')
+    } finally {
+      setLoading(false)
     }
-
-    setPending(true)
-    setToastMsg('退会申請を受け付けました。管理者による削除をお待ちください。')
   }
 
   return (

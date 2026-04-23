@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
+import { BASE_SKILL_OPTIONS, LEAD_SKILL_OPTION, SKILL_OPTIONS } from '@/lib/constants/skills'
 import { staffSchema } from '@/lib/validations/shift'
 import { z } from 'zod'
-
-const SKILL_OPTIONS = ['レジ', 'セッター', 'カウンター', 'フライヤー', 'グリル', '仕込み', 'メンテ', '閉店作業'] as const
 
 /** 管理者権限チェック共通処理 */
 async function assertAdmin() {
@@ -104,11 +103,24 @@ const putSchema = z.object({
   staff_code:           z.string().min(1, 'スタッフコードを入力してください'),
   role:                 z.enum(['staff', 'admin']),
   is_active:            z.boolean(),
+  is_approved:          z.boolean().optional(),
   skills:               z.array(z.enum(SKILL_OPTIONS)).default([]),
   email:                z.string().email('有効なメールアドレスを入力してください').toLowerCase(),
   new_password:         z.string().min(8, 'パスワードは8文字以上にしてください').optional().or(z.literal('')),
   is_deletion_requested:z.boolean().optional(),
 })
+
+function normalizeAndExpandSkills(inputSkills: readonly string[]) {
+  const uniqueValid = Array.from(new Set(inputSkills)).filter((skill): skill is (typeof SKILL_OPTIONS)[number] =>
+    SKILL_OPTIONS.includes(skill as (typeof SKILL_OPTIONS)[number]),
+  )
+
+  if (uniqueValid.includes(LEAD_SKILL_OPTION)) {
+    return [...BASE_SKILL_OPTIONS, LEAD_SKILL_OPTION]
+  }
+
+  return uniqueValid
+}
 
 export async function PUT(request: NextRequest) {
   const { error, status, supabase, user } = await assertAdmin()
@@ -131,7 +143,8 @@ export async function PUT(request: NextRequest) {
     )
   }
 
-  const { id, full_name, staff_code, role, is_active, skills, email, new_password, is_deletion_requested } = result.data
+  const { id, full_name, staff_code, role, is_active, is_approved, skills, email, new_password, is_deletion_requested } = result.data
+  const normalizedSkills = normalizeAndExpandSkills(skills)
 
   if (id === user.id && role !== 'admin') {
     return NextResponse.json({ error: '自分自身の権限は変更できません' }, { status: 403 })
@@ -157,7 +170,8 @@ export async function PUT(request: NextRequest) {
       staff_code,
       role,
       is_active,
-      skills,
+      ...(is_approved !== undefined ? { is_approved } : {}),
+      skills: normalizedSkills,
       ...(is_deletion_requested !== undefined ? { is_deletion_requested } : {}),
     })
     .eq('id', id)
