@@ -55,26 +55,32 @@ export async function updateSession(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('is_approved')
+    .select('is_approved, role')
     .eq('id', user.id)
     .maybeSingle()
 
-  if (!profile?.is_approved && isDashboard) {
+  const isApproved = profile?.is_approved === true
+
+  if (!isApproved && isDashboard) {
     const url = request.nextUrl.clone()
     url.pathname = '/pending'
     return NextResponse.redirect(url)
   }
 
-  if (profile?.is_approved && isPendingRoute) {
+  if (isApproved && isPendingRoute) {
     const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
+    url.pathname = profile?.role === 'admin' ? '/admin/shifts' : '/staff/shifts'
     return NextResponse.redirect(url)
   }
 
-  // 認証済みユーザーがログインページに来たら遷移先を制御
+  // 認証済みユーザーがログインページに来たらロールに応じた画面へ
   if (isAuthRoute) {
     const url = request.nextUrl.clone()
-    url.pathname = profile?.is_approved ? '/' : '/pending'
+    if (!isApproved) {
+      url.pathname = '/pending'
+    } else {
+      url.pathname = profile?.role === 'admin' ? '/admin/shifts' : '/staff/shifts'
+    }
     return NextResponse.redirect(url)
   }
 

@@ -48,10 +48,8 @@ export default function LoginForm() {
     setLineLoading(true)
 
     const supabase = createClient()
-    const nextPath = process.env.NEXT_PUBLIC_AUTH_REDIRECT_PATH || '/dashboard'
-    const safeNextPath = nextPath.startsWith('/') ? nextPath : `/${nextPath}`
     const redirectTo = new URL('/auth/callback', window.location.origin)
-    redirectTo.searchParams.set('next', safeNextPath)
+    redirectTo.searchParams.set('next', '/dashboard')
 
     const { error: authError } = await supabase.auth.signInWithOAuth({
       // auth-js の OAuth provider 型が custom:* を含まないため、実行時サポートに合わせて指定する
