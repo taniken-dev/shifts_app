@@ -137,8 +137,9 @@ export default function DailyWorkScheduleEditor({
   const [toast,     setToast]     = useState<string | null>(null)
   const [addProfId, setAddProfId] = useState('')
 
-  const dragRef     = useRef<DragState | null>(null)
-  const isDragging  = useRef(false)
+  const dragRef         = useRef<DragState | null>(null)
+  const isDragging      = useRef(false)
+  const touchStartRef   = useRef<{ x: number; y: number; profileId: string; rowEl: HTMLDivElement } | null>(null)
 
   // ── 日付ナビ ──────────────────────────────────────────────────────────────
   const dateObj    = parseISO(date)
@@ -196,14 +197,14 @@ export default function DailyWorkScheduleEditor({
     return snapTo30(Math.max(0, Math.min(TL_MINS, raw)))
   }, [])
 
-  // ── グローバルマウスイベント ───────────────────────────────────────────────
+  // ── グローバルポインターイベント（マウス + タッチ共通） ───────────────────
   useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
+    const applyMove = (clientX: number) => {
       const drag = dragRef.current
       if (!drag) return
       isDragging.current = true
 
-      const curMins = clientXToMins(e.clientX, drag.rowEl)
+      const curMins = clientXToMins(clientX, drag.rowEl)
       const delta   = curMins - drag.mouseStartMins
 
       setConfirmed(prev => prev.map(s => {
@@ -233,12 +234,13 @@ export default function DailyWorkScheduleEditor({
               endMins: Math.min(TL_MINS, Math.max(s.startMins + 30, snapTo30(drag.barEndMins + delta))),
               isDirty:  true,
             }
+          default:
+            return s
         }
-        return s
       }))
     }
 
-    const onMouseUp = () => {
+    const applyEnd = () => {
       const drag = dragRef.current
       if (!drag) return
 
@@ -254,15 +256,27 @@ export default function DailyWorkScheduleEditor({
       }
 
       dragRef.current = null
-      // クリックとドラッグを区別するため、少し遅延してフラグをリセット
       setTimeout(() => { isDragging.current = false }, 50)
     }
 
+    const onMouseMove = (e: MouseEvent) => applyMove(e.clientX)
+    const onMouseUp   = () => applyEnd()
+    const onTouchMove = (e: TouchEvent) => {
+      if (!dragRef.current) return
+      e.preventDefault() // ドラッグ中はスクロールを阻止
+      applyMove(e.touches[0].clientX)
+    }
+    const onTouchEnd = () => applyEnd()
+
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup',   onMouseUp)
+    window.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('touchend',  onTouchEnd)
     return () => {
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup',   onMouseUp)
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('touchend',  onTouchEnd)
     }
   }, [clientXToMins])
 
@@ -309,6 +323,56 @@ export default function DailyWorkScheduleEditor({
     e.preventDefault()
   }, [clientXToMins])
 
+  // ── 行背景タッチ開始（スクロール許可のため preventDefault しない） ────────
+  const handleRowTouchStart = useCallback((
+    e: React.TouchEvent<HTMLDivElement>,
+    profileId: string,
+  ) => {
+    if ((e.target as HTMLElement).closest('[data-shift-bar]')) return
+    const touch = e.touches[0]
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      profileId,
+      rowEl: e.currentTarget as HTMLDivElement,
+    }
+  }, [])
+
+  // ── 行背景タッチ終了：わずかな移動 → タップ → シフト追加 ─────────────────
+  const handleRowTouchEnd = useCallback((
+    e: React.TouchEvent<HTMLDivElement>,
+    profileId: string,
+  ) => {
+    const ts = touchStartRef.current
+    touchStartRef.current = null
+    if (!ts || ts.profileId !== profileId) return
+    if ((e.target as HTMLElement).closest('[data-shift-bar]')) return
+
+    const touch = e.changedTouches[0]
+    const dx = Math.abs(touch.clientX - ts.x)
+    const dy = Math.abs(touch.clientY - ts.y)
+    if (dx > 8 || dy > 8) return // スワイプ操作 → シフト追加しない
+
+    const startMins = clientXToMins(touch.clientX, ts.rowEl)
+    const EDGE_GUARD = 15
+    const overlapsBar = confirmed.some(s =>
+      s.profileId === profileId &&
+      startMins >= s.startMins - EDGE_GUARD &&
+      startMins <= s.endMins   + EDGE_GUARD
+    )
+    if (overlapsBar) return
+
+    const tempId = `new-${Date.now()}`
+    setConfirmed(prev => [...prev, {
+      localId:   tempId,
+      profileId,
+      startMins,
+      endMins:   Math.min(TL_MINS, snapTo30(startMins + 60)),
+      position:  null,
+      isDirty:   true,
+    }])
+  }, [clientXToMins, confirmed])
+
   // ── バー上のマウスダウン → 移動 / リサイズ ───────────────────────────────
   const handleBarMouseDown = useCallback((
     e: React.MouseEvent<HTMLDivElement>,
@@ -332,9 +396,39 @@ export default function DailyWorkScheduleEditor({
     e.stopPropagation()
   }, [clientXToMins])
 
+  // ── バー上のタッチ開始 → 移動 / リサイズ（ドラッグ中はスクロール阻止） ───
+  const handleBarTouchStart = useCallback((
+    e: React.TouchEvent<HTMLDivElement>,
+    shift: CShift,
+    mode: 'move' | 'resize-l' | 'resize-r',
+  ) => {
+    e.preventDefault()   // バーへのタッチはスクロールではなくドラッグとして扱う
+    e.stopPropagation()
+    const rowEl = e.currentTarget.closest('[data-timeline-row]') as HTMLDivElement | null
+    if (!rowEl) return
+    dragRef.current = {
+      mode,
+      localId:        shift.localId,
+      rowEl,
+      mouseStartMins: clientXToMins(e.touches[0].clientX, rowEl),
+      barStartMins:   shift.startMins,
+      barEndMins:     shift.endMins,
+    }
+  }, [clientXToMins])
+
   // ── バークリック → ポップオーバー ─────────────────────────────────────────
   const handleBarClick = useCallback((
     e: React.MouseEvent<HTMLDivElement>,
+    localId: string,
+  ) => {
+    if (isDragging.current) return
+    setPopover({ localId, anchorEl: e.currentTarget })
+    e.stopPropagation()
+  }, [])
+
+  // ── バータッチ終了：ドラッグしていなければポップオーバーを開く ────────────
+  const handleBarTouchEnd = useCallback((
+    e: React.TouchEvent<HTMLDivElement>,
     localId: string,
   ) => {
     if (isDragging.current) return
@@ -507,8 +601,12 @@ export default function DailyWorkScheduleEditor({
       </div>
 
       {/* ── タイムライン ── */}
-      <div className="overflow-x-auto">
-        <div style={{ minWidth: '760px' }}>
+      <div
+        className="overflow-x-auto"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        {/* スマホでも横スクロールが必要な幅を確保 */}
+        <div style={{ minWidth: '800px' }}>
 
           {/* 時間軸ヘッダー */}
           <div className="sticky top-0 z-10 flex border-b border-gray-200 bg-white shadow-sm">
@@ -561,9 +659,11 @@ export default function DailyWorkScheduleEditor({
                   {/* タイムライン列 */}
                   <div
                     className="flex-1 relative select-none"
-                    style={{ height: '72px', cursor: 'crosshair' }}
+                    style={{ height: '72px', cursor: 'crosshair', touchAction: 'pan-x' }}
                     data-timeline-row
                     onMouseDown={e => handleRowMouseDown(e, profile.id)}
+                    onTouchStart={e => handleRowTouchStart(e, profile.id)}
+                    onTouchEnd={e => handleRowTouchEnd(e, profile.id)}
                   >
                     {/* 開店時間帯の背景 */}
                     <div
@@ -615,6 +715,8 @@ export default function DailyWorkScheduleEditor({
                         shift={s}
                         onBarMouseDown={handleBarMouseDown}
                         onBarClick={handleBarClick}
+                        onBarTouchStart={handleBarTouchStart}
+                        onBarTouchEnd={handleBarTouchEnd}
                       />
                     ))}
                   </div>
@@ -661,25 +763,31 @@ function ConfirmedBar({
   shift,
   onBarMouseDown,
   onBarClick,
+  onBarTouchStart,
+  onBarTouchEnd,
 }: {
-  shift:          CShift
-  onBarMouseDown: (e: React.MouseEvent<HTMLDivElement>, shift: CShift, mode: 'move' | 'resize-l' | 'resize-r') => void
-  onBarClick:     (e: React.MouseEvent<HTMLDivElement>, localId: string) => void
+  shift:           CShift
+  onBarMouseDown:  (e: React.MouseEvent<HTMLDivElement>, shift: CShift, mode: 'move' | 'resize-l' | 'resize-r') => void
+  onBarClick:      (e: React.MouseEvent<HTMLDivElement>, localId: string) => void
+  onBarTouchStart: (e: React.TouchEvent<HTMLDivElement>, shift: CShift, mode: 'move' | 'resize-l' | 'resize-r') => void
+  onBarTouchEnd:   (e: React.TouchEvent<HTMLDivElement>, localId: string) => void
 }) {
+  const detectMode = (clientX: number, rect: DOMRect): 'resize-l' | 'resize-r' | 'move' => {
+    const relX = clientX - rect.left
+    const w    = rect.width
+    const handleZone = Math.min(36, w * 0.35)
+    if (relX <= handleZone)       return 'resize-l'
+    if (relX >= w - handleZone)   return 'resize-r'
+    return 'move'
+  }
+
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
-    const rect      = e.currentTarget.getBoundingClientRect()
-    const relX      = e.clientX - rect.left
-    const w         = rect.width
-    // ハンドル検出幅: 最低20px、バー幅の25%まで（小さいバーでも機能するよう）
-    const handleZone = Math.min(36, w * 0.35)
-    if (relX <= handleZone) {
-      onBarMouseDown(e, shift, 'resize-l')
-    } else if (relX >= w - handleZone) {
-      onBarMouseDown(e, shift, 'resize-r')
-    } else {
-      onBarMouseDown(e, shift, 'move')
-    }
+    onBarMouseDown(e, shift, detectMode(e.clientX, e.currentTarget.getBoundingClientRect()))
+  }
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    onBarTouchStart(e, shift, detectMode(e.touches[0].clientX, e.currentTarget.getBoundingClientRect()))
   }
 
   return (
@@ -691,15 +799,18 @@ function ConfirmedBar({
           : 'border-[#0a7a45] bg-[#006633]'
       }`}
       style={{
-        top:    '38px',
-        height: '26px',
-        left:   toLeft(shift.startMins),
-        width:  toWidth(shift.startMins, shift.endMins),
-        cursor: 'grab',
-        minWidth: '4px',
+        top:         '38px',
+        height:      '26px',
+        left:        toLeft(shift.startMins),
+        width:       toWidth(shift.startMins, shift.endMins),
+        cursor:      'grab',
+        minWidth:    '4px',
+        touchAction: 'none', // バーへのタッチはドラッグとして扱う
       }}
       onMouseDown={handleMouseDown}
       onClick={e => onBarClick(e, shift.localId)}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={e => onBarTouchEnd(e, shift.localId)}
     >
       {/* 左リサイズハンドル */}
       <div
