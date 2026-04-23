@@ -34,6 +34,11 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
+  const isAuthCallbackRoute = pathname.startsWith('/auth/callback')
+
+  if (isAuthCallbackRoute) {
+    return supabaseResponse
+  }
 
   // 未認証ユーザーをログインページへリダイレクト
   const isAuthRoute = pathname.startsWith('/login')

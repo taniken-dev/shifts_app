@@ -1,6 +1,8 @@
-import { NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 import type { EmailOtpType } from '@supabase/supabase-js'
-import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/server'
+import type { Database } from '@/types/database'
 
 async function ensureProfile(user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> }) {
   const admin = createServiceRoleClient()
@@ -22,15 +24,32 @@ async function ensureProfile(user: { id: string; email?: string | null; user_met
   )
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
-  const supabase = await createServerSupabaseClient()
-
   const code = requestUrl.searchParams.get('code')
   const tokenHash = requestUrl.searchParams.get('token_hash')
   const type = requestUrl.searchParams.get('type')
   const next = requestUrl.searchParams.get('next') ?? '/dashboard'
   const destination = next.startsWith('/') ? next : '/dashboard'
+  const destinationUrl = new URL(destination, requestUrl.origin)
+
+  let response = NextResponse.redirect(destinationUrl)
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options)
+          })
+        },
+      },
+    },
+  )
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
@@ -60,5 +79,5 @@ export async function GET(request: Request) {
     await ensureProfile(user)
   }
 
-  return NextResponse.redirect(new URL(destination, requestUrl.origin))
+  return response
 }
