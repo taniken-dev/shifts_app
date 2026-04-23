@@ -1,6 +1,22 @@
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import LogoutButton from '@/components/ui/LogoutButton'
 
 export default function PendingScreen() {
+  const router = useRouter()
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      router.refresh()
+    }, 10000)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [router])
+
   return (
     <div
       style={{
@@ -36,6 +52,9 @@ export default function PendingScreen() {
           このアカウントはまだ承認されていません。
           <br />
           店長の承認後にシフト管理画面を利用できます。
+        </p>
+        <p style={{ marginTop: '10px', fontSize: '12px', color: '#6b7280' }}>
+          承認状態を自動確認しています...
         </p>
         <div style={{ marginTop: '22px', display: 'flex', justifyContent: 'center' }}>
           <LogoutButton />

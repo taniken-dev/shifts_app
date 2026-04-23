@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value)
             response.cookies.set(name, value, options)
           })
         },
@@ -75,8 +76,18 @@ export async function GET(request: NextRequest) {
   }
 
   const { data: { user } } = await supabase.auth.getUser()
-  if (user) {
-    await ensureProfile(user)
+  if (!user) {
+    const loginUrl = new URL('/login', requestUrl.origin)
+    loginUrl.searchParams.set('error', 'oauth_callback_failed')
+    return NextResponse.redirect(loginUrl)
+  }
+
+  await ensureProfile(user)
+
+  if (!response.cookies.getAll().some((cookie) => cookie.name.startsWith('sb-'))) {
+    const loginUrl = new URL('/login', requestUrl.origin)
+    loginUrl.searchParams.set('error', 'oauth_callback_failed')
+    return NextResponse.redirect(loginUrl)
   }
 
   return response
