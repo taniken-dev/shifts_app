@@ -4,24 +4,52 @@ import type { EmailOtpType } from '@supabase/supabase-js'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database'
 
-async function ensureProfile(user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> }) {
-  const admin = createServiceRoleClient()
-  const defaultName =
-    typeof user.user_metadata?.full_name === 'string' && user.user_metadata.full_name.length > 0
-      ? user.user_metadata.full_name
-      : (user.email ?? '未設定')
+type AuthUserLike = {
+  id: string
+  email?: string | null
+  user_metadata?: Record<string, unknown>
+}
 
-  await admin.from('profiles').upsert(
-    {
+function resolveProfileName(user: AuthUserLike) {
+  const fullName = user.user_metadata?.full_name
+  if (typeof fullName === 'string' && fullName.trim().length > 0) return fullName
+
+  const name = user.user_metadata?.name
+  if (typeof name === 'string' && name.trim().length > 0) return name
+
+  const displayName = user.user_metadata?.display_name
+  if (typeof displayName === 'string' && displayName.trim().length > 0) return displayName
+
+  return user.email ?? '未設定'
+}
+
+async function ensureProfile(user: AuthUserLike) {
+  const admin = createServiceRoleClient()
+  const defaultName = resolveProfileName(user)
+
+  const { data: existingProfile, error: fetchError } = await admin
+    .from('profiles')
+    .select('id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (fetchError) return { ok: false as const, error: fetchError.message }
+  if (existingProfile) return { ok: true as const }
+
+  const { error: insertError } = await admin
+    .from('profiles')
+    .insert({
       id: user.id,
       staff_code: `PENDING-${user.id.slice(0, 8)}`,
       full_name: defaultName,
       role: 'staff',
       is_active: true,
       is_approved: false,
-    },
-    { onConflict: 'id', ignoreDuplicates: true },
-  )
+    })
+
+  if (insertError) return { ok: false as const, error: insertError.message }
+
+  return { ok: true as const }
 }
 
 export async function GET(request: NextRequest) {
@@ -82,7 +110,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  await ensureProfile(user)
+  const ensured = await ensureProfile(user)
+  if (!ensured.ok) {
+    const loginUrl = new URL('/login', requestUrl.origin)
+    loginUrl.searchParams.set('error', 'profile_sync_failed')
+    return NextResponse.redirect(loginUrl)
+  }
 
   if (!response.cookies.getAll().some((cookie) => cookie.name.startsWith('sb-'))) {
     const loginUrl = new URL('/login', requestUrl.origin)

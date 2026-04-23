@@ -18,6 +18,9 @@ export default function LoginForm() {
     if (authError === 'oauth_callback_failed') {
       setError('LINEログインに失敗しました。もう一度お試しください。')
     }
+    if (authError === 'profile_sync_failed') {
+      setError('アカウント情報の同期に失敗しました。時間をおいて再度お試しください。')
+    }
     if (authError === 'email_link_failed') {
       setError('メールリンクの認証に失敗しました。再度お試しください。')
     }
