@@ -2,16 +2,31 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Mail, Lock, Loader2, AlertCircle } from 'lucide-react'
+import { Mail, Lock, Loader2, AlertCircle, FlaskConical } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+
+const DEMO_ACCOUNTS = {
+  admin: {
+    email:    process.env.NEXT_PUBLIC_DEMO_ADMIN_EMAIL    ?? '',
+    password: process.env.NEXT_PUBLIC_DEMO_ADMIN_PASSWORD ?? '',
+    label:    '店長として体験',
+  },
+  staff: {
+    email:    process.env.NEXT_PUBLIC_DEMO_STAFF_EMAIL    ?? '',
+    password: process.env.NEXT_PUBLIC_DEMO_STAFF_PASSWORD ?? '',
+    label:    'スタッフとして体験',
+  },
+} as const
 
 export default function LoginForm() {
   const searchParams = useSearchParams()
+  const isDemoMode   = searchParams.get('demo') === 'true'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [lineLoading, setLineLoading] = useState(false)
+  const [demoLoading, setDemoLoading] = useState<'admin' | 'staff' | null>(null)
 
   useEffect(() => {
     const authError = searchParams.get('error')
@@ -68,7 +83,33 @@ export default function LoginForm() {
     }
   }
 
-  const isFormDisabled = loading || lineLoading
+  async function handleDemoLogin(role: 'admin' | 'staff') {
+    setError(null)
+    setDemoLoading(role)
+
+    const { email: demoEmail, password: demoPass } = DEMO_ACCOUNTS[role]
+    if (!demoEmail || !demoPass) {
+      setError('デモアカウントが設定されていません。')
+      setDemoLoading(null)
+      return
+    }
+
+    const supabase = createClient()
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email:    demoEmail,
+      password: demoPass,
+    })
+
+    if (authError) {
+      setError('デモログインに失敗しました。しばらくしてから再度お試しください。')
+      setDemoLoading(null)
+      return
+    }
+
+    window.location.href = '/dashboard'
+  }
+
+  const isFormDisabled = loading || lineLoading || demoLoading !== null
   const isSubmitDisabled =
     isFormDisabled ||
     !email ||
@@ -255,6 +296,95 @@ export default function LoginForm() {
           LINEログイン・メールログインのどちらでも、同一の Supabase ユーザーID を基準にプロフィール管理されます
         </p>
       </div>
+
+      {/* ── デモログイン（?demo=true の時のみ表示） ── */}
+      {isDemoMode && (
+        <div
+          style={{
+            marginTop: '24px',
+            borderRadius: '14px',
+            border: '1.5px dashed #bbf7d0',
+            backgroundColor: '#f0fdf4',
+            padding: '20px 18px 18px',
+          }}
+        >
+          {/* ヘッダー */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '4px' }}>
+            <FlaskConical
+              aria-hidden
+              style={{ width: '15px', height: '15px', color: '#16a34a', flexShrink: 0 }}
+            />
+            <span style={{ fontSize: '13px', fontWeight: 700, color: '#15803d', letterSpacing: '-0.01em' }}>
+              デモ体験ログイン
+            </span>
+            <span
+              style={{
+                marginLeft: 'auto',
+                fontSize: '10px',
+                fontWeight: 700,
+                color: '#16a34a',
+                backgroundColor: '#bbf7d0',
+                borderRadius: '999px',
+                padding: '2px 8px',
+                letterSpacing: '0.03em',
+              }}
+            >
+              DEMO
+            </span>
+          </div>
+          <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '14px', lineHeight: 1.6 }}>
+            ポートフォリオ閲覧用のサンプルアカウントです。
+          </p>
+
+          {/* ボタン群 */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            {(['admin', 'staff'] as const).map(role => {
+              const isThis = demoLoading === role
+              const isOther = demoLoading !== null && !isThis
+              return (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => handleDemoLogin(role)}
+                  disabled={isFormDisabled}
+                  style={{
+                    flex: 1,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    paddingTop: '11px',
+                    paddingBottom: '11px',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    letterSpacing: '-0.01em',
+                    border: '1.5px solid',
+                    cursor: isFormDisabled ? 'not-allowed' : 'pointer',
+                    transition: 'all 150ms ease',
+                    borderColor: isOther ? '#d1fae5' : '#22c55e',
+                    backgroundColor: isOther
+                      ? '#f0fdf4'
+                      : isThis
+                      ? '#16a34a'
+                      : '#22c55e',
+                    color: isOther ? '#86efac' : '#ffffff',
+                  }}
+                >
+                  {isThis ? (
+                    <>
+                      <Loader2 style={{ width: '13px', height: '13px' }} className="animate-spin" aria-hidden />
+                      ログイン中...
+                    </>
+                  ) : (
+                    DEMO_ACCOUNTS[role].label
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

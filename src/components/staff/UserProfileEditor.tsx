@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Mail, Lock, CircleAlert } from 'lucide-react'
+import { Mail, Lock, CircleAlert, FlaskConical } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 
 interface UserProfileEditorProps {
@@ -10,6 +10,7 @@ interface UserProfileEditorProps {
   email: string
   isLineLogin: boolean
   isDeletionRequested: boolean
+  isDemo: boolean
 }
 
 export default function UserProfileEditor({
@@ -18,6 +19,7 @@ export default function UserProfileEditor({
   email,
   isLineLogin,
   isDeletionRequested,
+  isDemo,
 }: UserProfileEditorProps) {
   const [pending, setPending] = useState(isDeletionRequested)
   const [loading, setLoading] = useState(false)
@@ -103,7 +105,22 @@ export default function UserProfileEditor({
           <h2 className="text-base font-semibold">退会申請</h2>
         </div>
 
-        {pending ? (
+        {isDemo ? (
+          <div
+            className="rounded-xl px-4 py-3 text-sm font-medium"
+            style={{
+              display:         'flex',
+              alignItems:      'center',
+              gap:             '8px',
+              backgroundColor: '#fef9c3',
+              color:           '#854d0e',
+              border:          '1px solid #fde047',
+            }}
+          >
+            <FlaskConical className="h-4 w-4 shrink-0" aria-hidden />
+            デモアカウントのため、退会申請は利用できません。
+          </div>
+        ) : pending ? (
           <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
             申請済み。管理者によるアカウント削除をお待ちください。
           </p>

@@ -12,7 +12,7 @@ export default async function StaffProfilePage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, staff_code, is_deletion_requested')
+    .select('full_name, staff_code, is_deletion_requested, is_demo')
     .eq('id', user.id)
     .single()
 
@@ -31,6 +31,7 @@ export default async function StaffProfilePage() {
       email={user.email ?? '未設定'}
       isLineLogin={provider.startsWith('custom:line')}
       isDeletionRequested={profile.is_deletion_requested}
+      isDemo={profile.is_demo ?? false}
     />
   )
 }

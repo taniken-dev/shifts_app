@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import NavBar from '@/components/ui/NavBar'
+import DemoBanner from '@/components/ui/DemoBanner'
 
 export default async function DashboardLayout({
   children,
@@ -14,7 +15,7 @@ export default async function DashboardLayout({
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, role')
+    .select('full_name, role, is_demo')
     .eq('id', user.id)
     .single()
 
@@ -23,6 +24,7 @@ export default async function DashboardLayout({
   return (
     // flex を一切使わない — ブロックレイアウト で確実に中央配置
     <div style={{ minHeight: '100vh', backgroundColor: '#F5F5F7' }}>
+      {profile.is_demo && <DemoBanner />}
       <NavBar fullName={profile.full_name} role={profile.role} />
       {/*
         ▼ ここが唯一の「センターコンテナ」

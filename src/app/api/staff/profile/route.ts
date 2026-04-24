@@ -13,6 +13,16 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // デモユーザーは設定変更不可
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('is_demo')
+    .eq('id', user.id)
+    .single()
+  if (profile?.is_demo) {
+    return NextResponse.json({ error: 'デモアカウントでは利用できません' }, { status: 403 })
+  }
+
   let body: unknown
   try {
     body = await request.json()

@@ -17,6 +17,7 @@ export interface Profile {
   is_active:   boolean
   is_approved: boolean
   is_deletion_requested: boolean
+  is_demo:     boolean
   skills:      string[]
   created_at:  string
   updated_at:  string
@@ -57,6 +58,7 @@ export type Database = {
           is_active:   boolean
           is_approved: boolean
           is_deletion_requested: boolean
+          is_demo:     boolean
           skills:      string[]
           created_at:  string
           updated_at:  string
@@ -69,6 +71,7 @@ export type Database = {
           is_active:   boolean
           is_approved?: boolean
           is_deletion_requested?: boolean
+          is_demo?:    boolean
           skills?:      string[]
         }
         Update: {
@@ -78,6 +81,7 @@ export type Database = {
           is_active?:  boolean
           is_approved?: boolean
           is_deletion_requested?: boolean
+          is_demo?:    boolean
           skills?:      string[]
         }
         Relationships: []
