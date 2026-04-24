@@ -348,7 +348,7 @@ export default function LoginForm() {
           </p>
 
           <div style={{ display: 'flex', gap: '10px' }}>
-            {(['admin', 'staff'] as const).map(role => {
+            {(['staff', 'admin'] as const).map(role => {
               const isThis = demoLoading === role
               const isOther = demoLoading !== null && !isThis
               return (
