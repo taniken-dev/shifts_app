@@ -250,7 +250,7 @@ export async function generatePeriodWorkScheduleXlsx(
   }
 
   const wb = new ExcelJS.Workbook()
-  wb.creator  = 'MOS SHIFT'
+  wb.creator  = 'M shift'
   wb.created  = new Date()
   wb.modified = new Date()
 
@@ -271,7 +271,7 @@ export async function generateWorkScheduleXlsx(
   shifts: ShiftRow[],
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook()
-  wb.creator = 'MOS SHIFT'
+  wb.creator = 'M shift'
   addDaySheet(wb, date, staff, shifts)
   const arrayBuffer = await wb.xlsx.writeBuffer()
   return Buffer.from(arrayBuffer)

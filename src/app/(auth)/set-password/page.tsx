@@ -68,7 +68,7 @@ export default async function SetPasswordPage() {
               margin: '0 0 5px',
             }}
           >
-            MOS SHIFT
+            M shift
           </h1>
           <p
             style={{
@@ -92,7 +92,7 @@ export default async function SetPasswordPage() {
             color: '#9ca3af',
           }}
         >
-          © {new Date().getFullYear()} MOS SHIFT — 店舗スタッフ専用
+          © {new Date().getFullYear()} M shift — 店舗スタッフ専用
         </p>
       </div>
     </div>

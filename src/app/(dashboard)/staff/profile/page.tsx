@@ -23,13 +23,16 @@ export default async function StaffProfilePage() {
   const provider = typeof user.app_metadata?.provider === 'string'
     ? user.app_metadata.provider
     : ''
+  const isLineLogin =
+    provider.startsWith('custom:line') ||
+    typeof user.user_metadata?.line_user_id === 'string'
 
   return (
     <UserProfileEditor
       fullName={profile.full_name}
       staffCode={profile.staff_code}
       email={user.email ?? '未設定'}
-      isLineLogin={provider.startsWith('custom:line')}
+      isLineLogin={isLineLogin}
       isDeletionRequested={profile.is_deletion_requested}
       isDemo={profile.is_demo ?? false}
     />

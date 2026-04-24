@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Mail, Lock, Loader2, AlertCircle, FlaskConical } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-
 const DEMO_ACCOUNTS = {
   admin: {
     email:    process.env.NEXT_PUBLIC_DEMO_ADMIN_EMAIL    ?? '',
@@ -61,26 +60,10 @@ export default function LoginForm() {
     window.location.href = '/dashboard'
   }
 
-  async function handleLineLogin() {
+  function handleLineLogin() {
     setError(null)
     setLineLoading(true)
-
-    const supabase = createClient()
-    const redirectTo = new URL('/auth/callback', window.location.origin)
-    redirectTo.searchParams.set('next', '/dashboard')
-
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      // auth-js の OAuth provider 型が custom:* を含まないため、実行時サポートに合わせて指定する
-      provider: 'custom:line' as never,
-      options: {
-        redirectTo: redirectTo.toString(),
-      },
-    })
-
-    if (authError) {
-      setError('LINEログインを開始できませんでした。時間をおいて再度お試しください。')
-      setLineLoading(false)
-    }
+    window.location.href = '/api/auth/line/init'
   }
 
   async function handleDemoLogin(role: 'admin' | 'staff') {

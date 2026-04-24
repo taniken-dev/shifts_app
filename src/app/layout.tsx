@@ -10,8 +10,8 @@ const notoSansJP = Noto_Sans_JP({
 
 export const metadata: Metadata = {
   title: {
-    default: 'シフト管理 | MOS SHIFT',
-    template: '%s | MOS SHIFT',
+    default: 'シフト管理 | M shift',
+    template: '%s | M shift',
   },
   description: 'モスバーガー店舗向けシフト希望管理システム',
   robots: { index: false, follow: false }, // 社内ツールのため検索エンジン除外
