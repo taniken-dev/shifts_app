@@ -64,8 +64,8 @@ export default function NavBar({ fullName, role, isDemo = false }: NavBarProps) 
             <span style={{ fontSize: '11px', fontWeight: 900, color: '#fff', letterSpacing: '-0.01em' }}>M</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '3px', whiteSpace: 'nowrap' }}>
-            <span style={{ fontSize: '13px', fontWeight: 900, color: '#111827', letterSpacing: '-0.02em' }}>MOS</span>
-            <span style={{ fontSize: '13px', fontWeight: 900, color: '#006633', letterSpacing: '-0.02em' }}>SHIFT</span>
+            <span style={{ fontSize: '13px', fontWeight: 900, color: '#111827', letterSpacing: '-0.02em' }}>M</span>
+            <span style={{ fontSize: '13px', fontWeight: 900, color: '#006633', letterSpacing: '-0.02em' }}>shift</span>
           </div>
         </Link>
 
