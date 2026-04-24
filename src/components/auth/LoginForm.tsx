@@ -151,24 +151,10 @@ export default function LoginForm() {
                 </>
               ) : (
                 <>
-                  <span
-                    aria-hidden
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '20px',
-                      height: '20px',
-                      borderRadius: '6px',
-                      backgroundColor: '#ffffff',
-                      color: '#06C755',
-                      fontSize: '11px',
-                      fontWeight: 900,
-                      lineHeight: 1,
-                    }}
-                  >
-                    LINE
-                  </span>
+                  <svg aria-hidden width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <rect width="24" height="24" rx="6" fill="white"/>
+                    <text x="12" y="16" textAnchor="middle" fill="#06C755" fontSize="9" fontWeight="900" fontFamily="Arial, sans-serif">LINE</text>
+                  </svg>
                   LINEでログイン
                 </>
               )}

@@ -415,55 +415,57 @@ export default function StaffManager({ staffList }: StaffManagerProps) {
       )}
 
       <div className="card overflow-hidden p-0">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-              <th className="px-4 py-3">コード</th>
-              <th className="px-4 py-3">氏名</th>
-              <th className="px-4 py-3">権限</th>
-              <th className="px-4 py-3 text-center">承認</th>
-              <th className="px-4 py-3 text-center">有効</th>
-              <th className="px-4 py-3 text-center">編集</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {staffList.map((staff) => (
-              <tr key={staff.id} className={`transition-colors hover:bg-gray-50 ${!staff.is_active ? 'opacity-50' : ''}`}>
-                <td className="px-4 py-3 font-mono text-xs text-gray-600">{staff.staff_code}</td>
-                <td className="px-4 py-3 font-medium text-gray-900">{staff.full_name}</td>
-                <td className="px-4 py-3">
-                  <span className={staff.role === 'admin' ? 'badge-approved' : 'badge-submitted'}>
-                    {staff.role === 'admin' ? '管理者' : 'スタッフ'}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <span className={staff.is_approved ? 'badge-approved' : 'badge-submitted'}>
-                    {staff.is_approved ? '承認済み' : '未承認'}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-center">
-                  {togglingId === staff.id
-                    ? <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-400" aria-hidden />
-                    : <Toggle
-                        checked={staff.is_active}
-                        onChange={() => handleToggleActive(staff.id, staff.is_active, staff.full_name)}
-                        disabled={staff.role === 'admin'}
-                      />
-                  }
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <button
-                    onClick={() => openEdit(staff)}
-                    className="text-gray-400 transition-colors hover:text-gray-700"
-                    aria-label="編集する"
-                  >
-                    <Pencil className="h-4 w-4" aria-hidden />
-                  </button>
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <th className="px-4 py-3">コード</th>
+                <th className="px-4 py-3">氏名</th>
+                <th className="px-4 py-3">権限</th>
+                <th className="px-4 py-3 text-center">承認</th>
+                <th className="px-4 py-3 text-center">有効</th>
+                <th className="px-4 py-3 text-center">編集</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {staffList.map((staff) => (
+                <tr key={staff.id} className={`transition-colors hover:bg-gray-50 ${!staff.is_active ? 'opacity-50' : ''}`}>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-600">{staff.staff_code}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">{staff.full_name}</td>
+                  <td className="px-4 py-3">
+                    <span className={staff.role === 'admin' ? 'badge-approved' : 'badge-submitted'}>
+                      {staff.role === 'admin' ? '管理者' : 'スタッフ'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={staff.is_approved ? 'badge-approved' : 'badge-submitted'}>
+                      {staff.is_approved ? '承認済み' : '未承認'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {togglingId === staff.id
+                      ? <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-400" aria-hidden />
+                      : <Toggle
+                          checked={staff.is_active}
+                          onChange={() => handleToggleActive(staff.id, staff.is_active, staff.full_name)}
+                          disabled={staff.role === 'admin'}
+                        />
+                    }
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => openEdit(staff)}
+                      className="text-gray-400 transition-colors hover:text-gray-700"
+                      aria-label="編集する"
+                    >
+                      <Pencil className="h-4 w-4" aria-hidden />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="card overflow-hidden p-0">
@@ -511,59 +513,61 @@ export default function StaffManager({ staffList }: StaffManagerProps) {
                   }
                 </button>
               </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                    <th className="px-4 py-3 w-8" />
-                    <th className="px-4 py-3">コード</th>
-                    <th className="px-4 py-3">氏名</th>
-                    <th className="px-4 py-3">権限</th>
-                    <th className="px-4 py-3 text-center">有効</th>
-                    <th className="px-4 py-3 text-center">編集</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {unapprovedStaff.map((staff) => (
-                    <tr key={staff.id} className={`transition-colors hover:bg-gray-50 ${!staff.is_active ? 'opacity-50' : ''}`}>
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(staff.id)}
-                          onChange={() => toggleSelect(staff.id)}
-                          disabled={bulkApproveLoading}
-                          aria-label={`${staff.full_name} を選択`}
-                        />
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-600">{staff.staff_code}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{staff.full_name}</td>
-                      <td className="px-4 py-3">
-                        <span className={staff.role === 'admin' ? 'badge-approved' : 'badge-submitted'}>
-                          {staff.role === 'admin' ? '管理者' : 'スタッフ'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {togglingId === staff.id
-                          ? <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-400" aria-hidden />
-                          : <Toggle
-                              checked={staff.is_active}
-                              onChange={() => handleToggleActive(staff.id, staff.is_active, staff.full_name)}
-                              disabled={staff.role === 'admin'}
-                            />
-                        }
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => openEdit(staff)}
-                          className="text-gray-400 transition-colors hover:text-gray-700"
-                          aria-label="編集する"
-                        >
-                          <Pencil className="h-4 w-4" aria-hidden />
-                        </button>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      <th className="px-4 py-3 w-8" />
+                      <th className="px-4 py-3">コード</th>
+                      <th className="px-4 py-3">氏名</th>
+                      <th className="px-4 py-3">権限</th>
+                      <th className="px-4 py-3 text-center">有効</th>
+                      <th className="px-4 py-3 text-center">編集</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {unapprovedStaff.map((staff) => (
+                      <tr key={staff.id} className={`transition-colors hover:bg-gray-50 ${!staff.is_active ? 'opacity-50' : ''}`}>
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(staff.id)}
+                            onChange={() => toggleSelect(staff.id)}
+                            disabled={bulkApproveLoading}
+                            aria-label={`${staff.full_name} を選択`}
+                          />
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-600">{staff.staff_code}</td>
+                        <td className="px-4 py-3 font-medium text-gray-900">{staff.full_name}</td>
+                        <td className="px-4 py-3">
+                          <span className={staff.role === 'admin' ? 'badge-approved' : 'badge-submitted'}>
+                            {staff.role === 'admin' ? '管理者' : 'スタッフ'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {togglingId === staff.id
+                            ? <Loader2 className="mx-auto h-5 w-5 animate-spin text-gray-400" aria-hidden />
+                            : <Toggle
+                                checked={staff.is_active}
+                                onChange={() => handleToggleActive(staff.id, staff.is_active, staff.full_name)}
+                                disabled={staff.role === 'admin'}
+                              />
+                          }
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            onClick={() => openEdit(staff)}
+                            className="text-gray-400 transition-colors hover:text-gray-700"
+                            aria-label="編集する"
+                          >
+                            <Pencil className="h-4 w-4" aria-hidden />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </>
           )
         )}

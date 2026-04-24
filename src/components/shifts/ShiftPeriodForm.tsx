@@ -43,6 +43,28 @@ function buildMonthOptions(): { value: string; label: string }[] {
   })
 }
 
+function getNextSubmissionPeriod(now: Date): { month: string; period: Period } {
+  let checkYear = now.getFullYear()
+  let checkMonth = now.getMonth() + 1
+  let checkPeriod: Period = now.getDate() <= 15 ? 'first' : 'second'
+
+  for (let i = 0; i < 8; i++) {
+    const monthStr = `${checkYear}-${String(checkMonth).padStart(2, '0')}`
+    if (calcDeadline(monthStr, checkPeriod) > now) {
+      return { month: monthStr, period: checkPeriod }
+    }
+    if (checkPeriod === 'first') {
+      checkPeriod = 'second'
+    } else {
+      checkPeriod = 'first'
+      if (++checkMonth > 12) { checkMonth = 1; checkYear++ }
+    }
+  }
+  const m = now.getMonth() + 2
+  const overflow = m > 12
+  return { month: `${overflow ? now.getFullYear() + 1 : now.getFullYear()}-${String(overflow ? m - 12 : m).padStart(2, '0')}`, period: 'first' }
+}
+
 function lastDayOf(year: number, month: number) { return new Date(year, month, 0).getDate() }
 
 function periodRange(period: Period, year: number, month: number): [number, number] {
@@ -305,14 +327,14 @@ function EditModeBanner({ periodLabel, onCancel }: { periodLabel: string; onCanc
 export default function ShiftPeriodForm() {
   const router       = useRouter()
   const monthOptions = useMemo(buildMonthOptions, [])
-  const defaultMonth = monthOptions[1]?.value ?? monthOptions[0].value
+  const { month: defaultMonth, period: defaultPeriod } = useMemo(() => getNextSubmissionPeriod(new Date()), [])
 
   const [month,            setMonth]            = useState<string>(defaultMonth)
-  const [period,           setPeriod]           = useState<Period>('first')
+  const [period,           setPeriod]           = useState<Period>(defaultPeriod)
 
   const deadline       = useMemo(() => calcDeadline(month, period), [month, period])
   const isPastDeadline = useMemo(() => !BYPASS_DEADLINE && new Date() > deadline, [deadline])
-  const [entries,          setEntries]          = useState<DayEntry[]>(() => buildEntries(defaultMonth, 'first'))
+  const [entries,          setEntries]          = useState<DayEntry[]>(() => buildEntries(defaultMonth, defaultPeriod))
   const [isPending,        startTransition]     = useTransition()
   const [success,          setSuccess]          = useState(false)
   const [submitError,      setSubmitError]      = useState<string | null>(null)

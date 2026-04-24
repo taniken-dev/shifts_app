@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'
 import ShiftMatrix from '@/components/admin/ShiftMatrix'
+import { calcDeadline } from '@/lib/utils/deadline'
 
 export const metadata: Metadata = { title: 'シフト管理 (管理者)' }
 // キャッシュを無効化して常に最新データを取得する
@@ -13,6 +14,36 @@ function lastDayOf(year: number, month: number) { return new Date(year, month, 0
 
 function periodRange(period: Period, year: number, month: number): [number, number] {
   return period === 'first' ? [1, 15] : [16, lastDayOf(year, month)]
+}
+
+function getNextSubmissionPeriod(now: Date): { month: string; period: Period } {
+  let checkYear = now.getFullYear()
+  let checkMonth = now.getMonth() + 1
+  let checkPeriod: Period = now.getDate() <= 15 ? 'first' : 'second'
+
+  for (let i = 0; i < 8; i++) {
+    const monthStr = `${checkYear}-${String(checkMonth).padStart(2, '0')}`
+    if (calcDeadline(monthStr, checkPeriod) > now) {
+      return { month: monthStr, period: checkPeriod }
+    }
+    if (checkPeriod === 'first') {
+      checkPeriod = 'second'
+    } else {
+      checkPeriod = 'first'
+      if (++checkMonth > 12) { checkMonth = 1; checkYear++ }
+    }
+  }
+  const m = now.getMonth() + 2
+  const overflow = m > 12
+  return { month: `${overflow ? now.getFullYear() + 1 : now.getFullYear()}-${String(overflow ? m - 12 : m).padStart(2, '0')}`, period: 'first' }
+}
+
+function getPrevPeriod(month: string, period: Period): { month: string; period: Period } {
+  if (period === 'second') return { month, period: 'first' }
+  const [y, m] = month.split('-').map(Number)
+  const pm = m === 1 ? 12 : m - 1
+  const py = m === 1 ? y - 1 : y
+  return { month: `${py}-${String(pm).padStart(2, '0')}`, period: 'second' }
 }
 
 export default async function AdminShiftsPage({
@@ -39,8 +70,10 @@ export default async function AdminShiftsPage({
 
   // URL パラメータ解析
   const params  = await searchParams
-  const month   = params.month ?? new Date().toISOString().slice(0, 7)
-  const defaultPeriod: Period = new Date().getDate() > 15 ? 'second' : 'first'
+  const now     = new Date()
+  const next    = getNextSubmissionPeriod(now)
+  const { month: defaultMonth, period: defaultPeriod } = getPrevPeriod(next.month, next.period)
+  const month   = params.month ?? defaultMonth
   const period  = (params.period === 'second' ? 'second' : params.period === 'first' ? 'first' : defaultPeriod) as Period
 
   const [year, monthNum] = month.split('-').map(Number)
