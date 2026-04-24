@@ -25,7 +25,7 @@ export default async function DashboardLayout({
     // flex を一切使わない — ブロックレイアウト で確実に中央配置
     <div style={{ minHeight: '100vh', backgroundColor: '#F5F5F7' }}>
       {profile.is_demo && <DemoBanner />}
-      <NavBar fullName={profile.full_name} role={profile.role} />
+      <NavBar fullName={profile.full_name} role={profile.role} isDemo={profile.is_demo ?? false} />
       {/*
         ▼ ここが唯一の「センターコンテナ」
           max-width: 672px  +  margin: 0 auto  で

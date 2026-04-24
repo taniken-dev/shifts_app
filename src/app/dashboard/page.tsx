@@ -20,7 +20,7 @@ export default async function DashboardEntryPage() {
   }
 
   if (profile?.role === 'admin') {
-    redirect('/admin/shifts')
+    redirect('/admin/schedule')
   }
 
   redirect('/staff/shifts')

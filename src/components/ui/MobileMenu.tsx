@@ -8,9 +8,10 @@ import LogoutButton from './LogoutButton'
 interface MobileMenuProps {
   isAdmin:  boolean
   fullName: string
+  isDemo?:  boolean
 }
 
-export default function MobileMenu({ isAdmin, fullName }: MobileMenuProps) {
+export default function MobileMenu({ isAdmin, fullName, isDemo = false }: MobileMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   const links = isAdmin
@@ -108,7 +109,7 @@ export default function MobileMenu({ isAdmin, fullName }: MobileMenuProps) {
               }}>
                 {fullName}
               </span>
-              <LogoutButton />
+              <LogoutButton isDemo={isDemo} />
             </div>
           </div>
         </>

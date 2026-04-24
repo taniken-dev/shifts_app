@@ -125,190 +125,201 @@ export default function LoginForm() {
           className="text-xl font-semibold tracking-tight"
           style={{ color: 'var(--gray-900)' }}
         >
-          アカウントにサインイン
+          {isDemoMode ? 'デモ体験ログイン' : 'アカウントにサインイン'}
         </h2>
         <p className="mt-1 text-sm" style={{ color: 'var(--gray-500)' }}>
-          LINEログインが最短です。招待済みスタッフはメールアドレスでもログインできます。
+          {isDemoMode
+            ? 'ポートフォリオ閲覧用のサンプルアカウントでログインできます。'
+            : 'LINEログインが最短です。招待済みスタッフはメールアドレスでもログインできます。'}
         </p>
       </div>
 
-      <div>
-        <button
-          type="button"
-          onClick={handleLineLogin}
-          disabled={isFormDisabled}
-          aria-label="LINEでログイン"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            width: '100%',
-            height: '56px',
-            borderRadius: '12px',
-            border: 'none',
-            backgroundColor: isFormDisabled ? '#9ddfb1' : '#06C755',
-            color: '#ffffff',
-            fontSize: '16px',
-            fontWeight: 800,
-            letterSpacing: '-0.01em',
-            cursor: isFormDisabled ? 'not-allowed' : 'pointer',
-            transition: 'all 150ms ease',
-          }}
-        >
-          {lineLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              LINEでログイン中...
-            </>
-          ) : (
-            <>
-              <span
-                aria-hidden
+      {/* ── 通常ログイン（デモモード時は非表示） ── */}
+      {!isDemoMode && (
+        <>
+          <div>
+            <button
+              type="button"
+              onClick={handleLineLogin}
+              disabled={isFormDisabled}
+              aria-label="LINEでログイン"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                width: '100%',
+                height: '56px',
+                borderRadius: '12px',
+                border: 'none',
+                backgroundColor: isFormDisabled ? '#9ddfb1' : '#06C755',
+                color: '#ffffff',
+                fontSize: '16px',
+                fontWeight: 800,
+                letterSpacing: '-0.01em',
+                cursor: isFormDisabled ? 'not-allowed' : 'pointer',
+                transition: 'all 150ms ease',
+              }}
+            >
+              {lineLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  LINEでログイン中...
+                </>
+              ) : (
+                <>
+                  <span
+                    aria-hidden
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '6px',
+                      backgroundColor: '#ffffff',
+                      color: '#06C755',
+                      fontSize: '11px',
+                      fontWeight: 900,
+                      lineHeight: 1,
+                    }}
+                  >
+                    LINE
+                  </span>
+                  LINEでログイン
+                </>
+              )}
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginTop: '20px',
+              marginBottom: '20px',
+            }}
+          >
+            <div style={{ height: '1px', flex: 1, backgroundColor: 'var(--gray-100)' }} />
+            <span style={{ fontSize: '12px', color: 'var(--gray-400)' }}>または</span>
+            <div style={{ height: '1px', flex: 1, backgroundColor: 'var(--gray-100)' }} />
+          </div>
+
+          <form onSubmit={handleSubmit} noValidate className="space-y-5">
+
+            {/* メールアドレス */}
+            <div>
+              <label htmlFor="email" className="label">メールアドレス</label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+                  <Mail className="h-[17px] w-[17px]" style={{ color: 'var(--gray-400)' }} aria-hidden />
+                </span>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="input-field pl-10"
+                  placeholder="you@example.com"
+                  disabled={isFormDisabled}
+                />
+              </div>
+            </div>
+
+            {/* パスワード */}
+            <div>
+              <label htmlFor="password" className="label">パスワード</label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+                  <Lock className="h-[17px] w-[17px]" style={{ color: 'var(--gray-400)' }} aria-hidden />
+                </span>
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input-field pl-10"
+                  placeholder="••••••••"
+                  disabled={isFormDisabled}
+                />
+              </div>
+            </div>
+
+            {/* エラーメッセージ */}
+            {error && (
+              <div role="alert" className="alert-error">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* ログインボタン */}
+            <div className="pt-1">
+              <button
+                type="submit"
+                disabled={isSubmitDisabled}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: '20px',
-                  height: '20px',
-                  borderRadius: '6px',
-                  backgroundColor: '#ffffff',
-                  color: '#06C755',
-                  fontSize: '11px',
-                  fontWeight: 900,
-                  lineHeight: 1,
+                  gap: '7px',
+                  width: '100%',
+                  paddingTop: '14px',
+                  paddingBottom: '14px',
+                  borderRadius: '12px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
+                  backgroundColor: isSubmitDisabled ? '#e5e7eb' : '#374151',
+                  color: isSubmitDisabled ? '#9ca3af' : '#ffffff',
+                  border: 'none',
+                  letterSpacing: '-0.01em',
+                  transition: 'all 150ms ease',
                 }}
               >
-                LINE
-              </span>
-              LINEでログイン
-            </>
-          )}
-        </button>
-      </div>
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    サインイン中...
+                  </>
+                ) : (
+                  'サインイン'
+                )}
+              </button>
+            </div>
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          marginTop: '20px',
-          marginBottom: '20px',
-        }}
-      >
-        <div style={{ height: '1px', flex: 1, backgroundColor: 'var(--gray-100)' }} />
-        <span style={{ fontSize: '12px', color: 'var(--gray-400)' }}>または</span>
-        <div style={{ height: '1px', flex: 1, backgroundColor: 'var(--gray-100)' }} />
-      </div>
+          </form>
 
-      <form onSubmit={handleSubmit} noValidate className="space-y-5">
-
-        {/* メールアドレス */}
-        <div>
-          <label htmlFor="email" className="label">メールアドレス</label>
-          <div className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Mail className="h-[17px] w-[17px]" style={{ color: 'var(--gray-400)' }} aria-hidden />
-            </span>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input-field pl-10"
-              placeholder="you@example.com"
-              disabled={isFormDisabled}
-            />
+          {/* フッター区切り */}
+          <div className="mt-8 pt-6" style={{ borderTop: '1px solid var(--gray-100)' }}>
+            <p className="text-center text-xs" style={{ color: 'var(--gray-400)' }}>
+              LINEログイン・メールログインのどちらでも、同一の Supabase ユーザーID を基準にプロフィール管理されます
+            </p>
           </div>
-        </div>
+        </>
+      )}
 
-        {/* パスワード */}
-        <div>
-          <label htmlFor="password" className="label">パスワード</label>
-          <div className="relative">
-            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Lock className="h-[17px] w-[17px]" style={{ color: 'var(--gray-400)' }} aria-hidden />
-            </span>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input-field pl-10"
-              placeholder="••••••••"
-              disabled={isFormDisabled}
-            />
-          </div>
-        </div>
-
-        {/* エラーメッセージ */}
-        {error && (
-          <div role="alert" className="alert-error">
-            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* ログインボタン — w-full, py-3 相当 */}
-        <div className="pt-1">
-          <button
-            type="submit"
-            disabled={isSubmitDisabled}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '7px',
-              width: '100%',
-              paddingTop: '14px',
-              paddingBottom: '14px',
-              borderRadius: '12px',
-              fontSize: '14px',
-              fontWeight: 700,
-              cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
-              backgroundColor: isSubmitDisabled ? '#e5e7eb' : '#374151',
-              color: isSubmitDisabled ? '#9ca3af' : '#ffffff',
-              border: 'none',
-              letterSpacing: '-0.01em',
-              transition: 'all 150ms ease',
-            }}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                サインイン中...
-              </>
-            ) : (
-              'サインイン'
-            )}
-          </button>
-        </div>
-
-      </form>
-
-      {/* フッター区切り */}
-      <div className="mt-8 pt-6" style={{ borderTop: '1px solid var(--gray-100)' }}>
-        <p className="text-center text-xs" style={{ color: 'var(--gray-400)' }}>
-          LINEログイン・メールログインのどちらでも、同一の Supabase ユーザーID を基準にプロフィール管理されます
-        </p>
-      </div>
-
-      {/* ── デモログイン（?demo=true の時のみ表示） ── */}
+      {/* ── デモログイン（?view=demo の時のみ表示） ── */}
       {isDemoMode && (
         <div
           style={{
-            marginTop: '24px',
             borderRadius: '14px',
             border: '1.5px dashed #bbf7d0',
             backgroundColor: '#f0fdf4',
             padding: '20px 18px 18px',
           }}
         >
-          {/* ヘッダー */}
+          {error && (
+            <div role="alert" className="alert-error" style={{ marginBottom: '12px' }}>
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
+              <span>{error}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '4px' }}>
             <FlaskConical
               aria-hidden
@@ -336,7 +347,6 @@ export default function LoginForm() {
             ポートフォリオ閲覧用のサンプルアカウントです。
           </p>
 
-          {/* ボタン群 */}
           <div style={{ display: 'flex', gap: '10px' }}>
             {(['admin', 'staff'] as const).map(role => {
               const isThis = demoLoading === role

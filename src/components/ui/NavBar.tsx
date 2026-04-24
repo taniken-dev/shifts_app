@@ -7,9 +7,10 @@ import MobileMenu from './MobileMenu'
 interface NavBarProps {
   fullName: string
   role: Role
+  isDemo?: boolean
 }
 
-export default function NavBar({ fullName, role }: NavBarProps) {
+export default function NavBar({ fullName, role, isDemo = false }: NavBarProps) {
   const isAdmin = role === 'admin'
 
   return (
@@ -108,12 +109,12 @@ export default function NavBar({ fullName, role }: NavBarProps) {
           >
             {fullName}
           </span>
-          <LogoutButton />
+          <LogoutButton isDemo={isDemo} />
         </div>
 
         {/* モバイル用ハンバーガー（md未満で表示） */}
         <div className="md:hidden">
-          <MobileMenu isAdmin={isAdmin} fullName={fullName} />
+          <MobileMenu isAdmin={isAdmin} fullName={fullName} isDemo={isDemo} />
         </div>
       </div>
     </header>

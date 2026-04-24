@@ -28,12 +28,14 @@ export default async function AdminShiftsPage({
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, is_demo')
     .eq('id', user.id)
     .single()
 
   console.log('[ADMIN SHIFTS] user:', user.email, '/ role:', profile?.role)
   if (profile?.role !== 'admin') redirect('/staff/shifts')
+
+  const isDemo = profile?.is_demo ?? false
 
   // URL パラメータ解析
   const params  = await searchParams
@@ -58,23 +60,25 @@ export default async function AdminShiftsPage({
     </div>
   }
 
-  // アクティブなスタッフ全員取得（管理者除外）
+  // 同じデモ区分のアクティブなスタッフ全員取得（管理者除外）
   const { data: staff, error: staffError } = await db
     .from('profiles')
     .select('id, staff_code, full_name')
     .eq('is_active', true)
     .eq('role', 'staff')
+    .eq('is_demo', isDemo)
     .order('staff_code', { ascending: true })
 
   if (staffError) console.error('[ADMIN SHIFTS] staff fetch error:', staffError.message)
 
-  // 対象期間のシフト全件取得（全ステータス）
+  // 対象期間のシフト全件取得（同じデモ区分のみ）
   const { data: shifts, error: shiftsError } = await db
     .from('shifts')
     .select(`
       *,
-      profiles ( staff_code, full_name )
+      profiles!inner ( staff_code, full_name, is_demo )
     `)
+    .eq('profiles.is_demo', isDemo)
     .gte('shift_date', from)
     .lte('shift_date', to)
     .order('shift_date', { ascending: true })

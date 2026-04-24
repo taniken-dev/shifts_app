@@ -29,11 +29,13 @@ export default async function AdminSchedulePage({
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, is_demo')
     .eq('id', user.id)
     .single()
 
   if (profile?.role !== 'admin') redirect('/staff/shifts')
+
+  const isDemo = profile?.is_demo ?? false
 
   // 対象日（未指定時は半月選択画面を表示）
   const params     = await searchParams
@@ -55,7 +57,8 @@ export default async function AdminSchedulePage({
     // 年/月/前半後半のユニーク組み合わせを作る。
     const { data: submittedRows, error: submittedError } = await db
       .from('shifts')
-      .select('shift_date')
+      .select('shift_date, profiles!inner(is_demo)')
+      .eq('profiles.is_demo', isDemo)
       .eq('status', 'submitted')
 
     if (submittedError) {
@@ -143,25 +146,28 @@ export default async function AdminSchedulePage({
     )
   }
 
-  // アクティブなスタッフ全員
+  // 同じデモ区分のアクティブなスタッフ全員
   const { data: profiles } = await db
     .from('profiles')
     .select('id, staff_code, full_name')
     .eq('is_active', true)
     .eq('role', 'staff')
+    .eq('is_demo', isDemo)
     .order('staff_code', { ascending: true })
 
-  // 希望シフト（status = submitted）
+  // 希望シフト（status = submitted、同じデモ区分のみ）
   const { data: requested } = await db
     .from('shifts')
-    .select('*, profiles(staff_code, full_name)')
+    .select('*, profiles!inner(staff_code, full_name, is_demo)')
+    .eq('profiles.is_demo', isDemo)
     .eq('shift_date', targetDate)
     .eq('status', 'submitted')
 
-  // 確定シフト（status = approved）
+  // 確定シフト（status = approved、同じデモ区分のみ）
   const { data: confirmed } = await db
     .from('shifts')
-    .select('*, profiles(staff_code, full_name)')
+    .select('*, profiles!inner(staff_code, full_name, is_demo)')
+    .eq('profiles.is_demo', isDemo)
     .eq('shift_date', targetDate)
     .eq('status', 'approved')
 

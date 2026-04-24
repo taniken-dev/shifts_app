@@ -4,30 +4,61 @@ import { BASE_SKILL_OPTIONS, LEAD_SKILL_OPTION, SKILL_OPTIONS } from '@/lib/cons
 import { staffSchema } from '@/lib/validations/shift'
 import { z } from 'zod'
 
-/** 管理者権限チェック共通処理 */
+/**
+ * 管理者権限チェック共通処理
+ * is_demo を返すことで、デモ管理者が本番データを操作できないよう各ハンドラで制御する
+ */
 async function assertAdmin() {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: 'Unauthorized', status: 401, supabase: null, user: null }
+  if (!user) return { error: 'Unauthorized', status: 401, user: null, isDemo: false }
 
-  const { data: profile } = await supabase
+  const svc = createServiceRoleClient()
+  const { data: profile } = await svc
     .from('profiles')
-    .select('role, is_approved')
+    .select('role, is_approved, is_demo')
     .eq('id', user.id)
     .single()
 
   if (profile?.role !== 'admin' || !profile.is_approved) {
-    return { error: 'Forbidden', status: 403, supabase: null, user: null }
+    return { error: 'Forbidden', status: 403, user: null, isDemo: false }
   }
 
-  return { error: null, status: 200, supabase, user }
+  return { error: null, status: 200, user, isDemo: profile.is_demo ?? false }
+}
+
+/**
+ * 操作対象プロフィールの is_demo を取得し、ログイン中の管理者と一致するか確認する。
+ * 不一致の場合はデモ←→本番の越境操作なので 403 を返す。
+ */
+async function assertSameDemoScope(
+  targetId: string,
+  adminIsDemo: boolean,
+): Promise<{ error: string; status: number } | null> {
+  const svc = createServiceRoleClient()
+  const { data: target } = await svc
+    .from('profiles')
+    .select('is_demo')
+    .eq('id', targetId)
+    .single()
+
+  if (!target) return { error: '対象ユーザーが見つかりません', status: 404 }
+
+  if ((target.is_demo ?? false) !== adminIsDemo) {
+    return { error: 'デモと本番のデータは相互に操作できません', status: 403 }
+  }
+
+  return null
 }
 
 // POST /api/admin/staff — スタッフ招待メール送信
 export async function POST(request: NextRequest) {
-  const { error, status, supabase } = await assertAdmin()
-  if (error || !supabase) {
-    return NextResponse.json({ error }, { status })
+  const { error, status, isDemo } = await assertAdmin()
+  if (error) return NextResponse.json({ error }, { status })
+
+  // デモ管理者は新規招待不可（本番の auth.users を汚染させない）
+  if (isDemo) {
+    return NextResponse.json({ error: 'デモアカウントでは招待メールを送信できません' }, { status: 403 })
   }
 
   let body: unknown
@@ -53,9 +84,8 @@ export async function POST(request: NextRequest) {
     process.env.NEXT_PUBLIC_AUTH_REDIRECT_PATH || '/dashboard',
   )
 
-  // Service Role でユーザー招待（スタッフ本人がメールからパスワード設定）
-  const admin = createServiceRoleClient()
-  const { data: invitedUser, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
+  const svc = createServiceRoleClient()
+  const { data: invitedUser, error: inviteError } = await svc.auth.admin.inviteUserByEmail(email, {
     data: { full_name, role: 'staff' },
     redirectTo: redirectTo.toString(),
   })
@@ -79,8 +109,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '招待ユーザーの作成に失敗しました' }, { status: 500 })
   }
 
-  // profiles の staff_code と full_name を確定値で更新（トリガーで仮値が入っているため）
-  const { error: profileError } = await admin
+  const { error: profileError } = await svc
     .from('profiles')
     .update({
       staff_code,
@@ -93,7 +122,6 @@ export async function POST(request: NextRequest) {
 
   if (profileError) {
     console.error('profile update error:', profileError.message)
-    // 招待メールは送信済みなのでロールバックしない（管理画面で手動修正可能）
   }
 
   return NextResponse.json({ ok: true }, { status: 201 })
@@ -126,10 +154,8 @@ function normalizeAndExpandSkills(inputSkills: readonly string[]) {
 }
 
 export async function PUT(request: NextRequest) {
-  const { error, status, supabase, user } = await assertAdmin()
-  if (error || !supabase || !user) {
-    return NextResponse.json({ error }, { status })
-  }
+  const { error, status, user, isDemo } = await assertAdmin()
+  if (error || !user) return NextResponse.json({ error }, { status })
 
   let body: unknown
   try {
@@ -153,10 +179,14 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: '自分自身の権限は変更できません' }, { status: 403 })
   }
 
-  const admin = createServiceRoleClient()
+  // デモ境界チェック：管理者と対象スタッフの is_demo が一致しなければ拒否
+  const scopeError = await assertSameDemoScope(id, isDemo)
+  if (scopeError) return NextResponse.json({ error: scopeError.error }, { status: scopeError.status })
+
+  const svc = createServiceRoleClient()
   const passwordToUpdate = new_password?.trim() ? new_password.trim() : null
 
-  const { error: authUpdateError } = await admin.auth.admin.updateUserById(id, {
+  const { error: authUpdateError } = await svc.auth.admin.updateUserById(id, {
     email,
     ...(passwordToUpdate ? { password: passwordToUpdate } : {}),
   })
@@ -166,7 +196,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'メールアドレスまたはパスワードの更新に失敗しました' }, { status: 500 })
   }
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await svc
     .from('profiles')
     .update({
       full_name,
@@ -202,10 +232,8 @@ const patchSchema = z.object({
 )
 
 export async function PATCH(request: NextRequest) {
-  const { error, status, supabase } = await assertAdmin()
-  if (error || !supabase) {
-    return NextResponse.json({ error }, { status })
-  }
+  const { error, status, isDemo } = await assertAdmin()
+  if (error) return NextResponse.json({ error }, { status })
 
   let body: unknown
   try {
@@ -221,8 +249,13 @@ export async function PATCH(request: NextRequest) {
 
   const { id, is_active, is_approved, is_deletion_requested } = result.data
 
-  // 対象スタッフが管理者でないことを確認（管理者の is_active は変更不可）
-  const { data: target } = await supabase
+  // デモ境界チェック
+  const scopeError = await assertSameDemoScope(id, isDemo)
+  if (scopeError) return NextResponse.json({ error: scopeError.error }, { status: scopeError.status })
+
+  const svc = createServiceRoleClient()
+
+  const { data: target } = await svc
     .from('profiles')
     .select('role')
     .eq('id', id)
@@ -237,7 +270,7 @@ export async function PATCH(request: NextRequest) {
   if (is_approved !== undefined) updates.is_approved = is_approved
   if (is_deletion_requested !== undefined) updates.is_deletion_requested = is_deletion_requested
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await svc
     .from('profiles')
     .update(updates)
     .eq('id', id)
@@ -254,9 +287,12 @@ const deleteSchema = z.object({
 })
 
 export async function DELETE(request: NextRequest) {
-  const { error, status, user } = await assertAdmin()
-  if (error || !user) {
-    return NextResponse.json({ error }, { status })
+  const { error, status, user, isDemo } = await assertAdmin()
+  if (error || !user) return NextResponse.json({ error }, { status })
+
+  // デモ管理者はアカウント削除不可
+  if (isDemo) {
+    return NextResponse.json({ error: 'デモアカウントでは削除できません' }, { status: 403 })
   }
 
   let body: unknown
@@ -275,8 +311,8 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: '自分自身のアカウントは削除できません' }, { status: 403 })
   }
 
-  const admin = createServiceRoleClient()
-  const { error: deleteError } = await admin.auth.admin.deleteUser(result.data.id)
+  const svc = createServiceRoleClient()
+  const { error: deleteError } = await svc.auth.admin.deleteUser(result.data.id)
   if (deleteError) {
     return NextResponse.json({ error: 'アカウント削除に失敗しました' }, { status: 500 })
   }

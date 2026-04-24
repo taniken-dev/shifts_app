@@ -32,17 +32,20 @@ export default async function AdminStaffPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, is_demo')
     .eq('id', user.id)
     .single()
 
   if (profile?.role !== 'admin') redirect('/staff/shifts')
+
+  const isDemo = profile?.is_demo ?? false
 
   const admin = createServiceRoleClient()
   const [{ data: initialStaffList, error }, usersResult] = await Promise.all([
     admin
       .from('profiles')
       .select('id, staff_code, full_name, role, is_active, is_approved, is_deletion_requested, skills, created_at')
+      .eq('is_demo', isDemo)
       .order('staff_code', { ascending: true }),
     admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
   ])
