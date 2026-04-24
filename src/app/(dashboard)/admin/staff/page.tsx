@@ -41,12 +41,17 @@ export default async function AdminStaffPage() {
   const isDemo = profile?.is_demo ?? false
 
   const admin = createServiceRoleClient()
-  const [{ data: initialStaffList, error }, usersResult] = await Promise.all([
+  const [{ data: initialStaffList, error }, { data: allProfileIds }, usersResult] = await Promise.all([
+    // 表示用：自分と同じ is_demo 区分のプロフィールのみ
     admin
       .from('profiles')
       .select('id, staff_code, full_name, role, is_active, is_approved, is_deletion_requested, skills, created_at')
       .eq('is_demo', isDemo)
       .order('staff_code', { ascending: true }),
+    // バックフィル用：全プロフィールのIDだけ取得（is_demo 問わず）
+    admin
+      .from('profiles')
+      .select('id'),
     admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),
   ])
 
@@ -55,8 +60,10 @@ export default async function AdminStaffPage() {
 
   let staffList = initialStaffList ?? []
   const authUsers = (usersResult.data?.users ?? []) as AuthUserForSync[]
-  const existingProfileIds = new Set(staffList.map((staff) => staff.id))
-  const missingProfileUsers = authUsers.filter((authUser) => !existingProfileIds.has(authUser.id))
+
+  // 全プロフィールIDと照合することで is_demo が異なるユーザーを誤ってバックフィルしない
+  const allExistingIds = new Set((allProfileIds ?? []).map((p) => p.id))
+  const missingProfileUsers = authUsers.filter((authUser) => !allExistingIds.has(authUser.id))
 
   if (missingProfileUsers.length > 0) {
     const { error: backfillError } = await admin
@@ -78,6 +85,7 @@ export default async function AdminStaffPage() {
       const { data: refreshedStaffList, error: refreshError } = await admin
         .from('profiles')
         .select('id, staff_code, full_name, role, is_active, is_approved, is_deletion_requested, skills, created_at')
+        .eq('is_demo', isDemo)
         .order('staff_code', { ascending: true })
       if (refreshError) {
         console.error('staff refetch error:', refreshError.message)
