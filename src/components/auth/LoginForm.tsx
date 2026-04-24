@@ -20,7 +20,7 @@ const DEMO_ACCOUNTS = {
 
 export default function LoginForm() {
   const searchParams = useSearchParams()
-  const isDemoMode   = searchParams.get('demo') === 'true'
+  const isDemoMode   = searchParams.get('view') === 'demo'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
