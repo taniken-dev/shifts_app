@@ -42,31 +42,20 @@ export async function GET(request: NextRequest) {
   const lineEmail = `line_${lineId}@line.user`
   const admin = createServiceRoleClient()
 
-  // Find or create Supabase user
-  const { data: userList } = await admin.auth.admin.listUsers({ perPage: 1000 })
-  const existingUser = userList?.users.find(u => u.email === lineEmail)
+  // Create user if not exists (422 = already registered = safe to continue)
+  const { error: createError } = await admin.auth.admin.createUser({
+    email: lineEmail,
+    email_confirm: true,
+    user_metadata: {
+      full_name: name,
+      avatar_url: picture,
+      provider: 'custom:line',
+      line_user_id: lineId,
+    },
+  })
 
-  if (existingUser) {
-    await admin.auth.admin.updateUserById(existingUser.id, {
-      user_metadata: {
-        full_name: name,
-        avatar_url: picture,
-        provider: 'custom:line',
-        line_user_id: lineId,
-      },
-    })
-  } else {
-    const { error } = await admin.auth.admin.createUser({
-      email: lineEmail,
-      email_confirm: true,
-      user_metadata: {
-        full_name: name,
-        avatar_url: picture,
-        provider: 'custom:line',
-        line_user_id: lineId,
-      },
-    })
-    if (error) return NextResponse.redirect(errorUrl)
+  if (createError && !createError.message.includes('already been registered')) {
+    return NextResponse.redirect(errorUrl)
   }
 
   // Generate magic link to create session (does not send email)
