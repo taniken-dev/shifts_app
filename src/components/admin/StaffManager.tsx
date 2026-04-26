@@ -15,6 +15,7 @@ type ManagedStaff = Pick<
 
 interface StaffManagerProps {
   staffList: ManagedStaff[]
+  isDemo?: boolean
 }
 
 type FieldErrors = Partial<Record<keyof StaffInput, string>>
@@ -101,7 +102,7 @@ async function readErrorMessage(res: Response, fallback: string) {
   }
 }
 
-export default function StaffManager({ staffList }: StaffManagerProps) {
+export default function StaffManager({ staffList, isDemo = false }: StaffManagerProps) {
   const router = useRouter()
 
   const [showForm, setShowForm] = useState(false)
@@ -366,12 +367,33 @@ export default function StaffManager({ staffList }: StaffManagerProps) {
     <div className="space-y-4">
       {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
 
-      <button onClick={() => setShowForm(!showForm)} className="btn-primary">
-        <UserPlus className="h-4 w-4" aria-hidden />
-        スタッフを招待
-      </button>
+      {isDemo && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            backgroundColor: '#fef9c3',
+            border: '1px solid #fde68a',
+            fontSize: '13px',
+            color: '#92400e',
+            fontWeight: 500,
+          }}
+        >
+          デモ環境では閲覧のみ可能です。招待・承認・編集・削除などの変更操作は本番環境に影響しないよう制限されています。
+        </div>
+      )}
 
-      {showForm && (
+      {!isDemo && (
+        <button onClick={() => setShowForm(!showForm)} className="btn-primary">
+          <UserPlus className="h-4 w-4" aria-hidden />
+          スタッフを招待
+        </button>
+      )}
+
+      {!isDemo && showForm && (
         <div className="card">
           <h2 className="mb-1 text-base font-semibold text-gray-800">スタッフの招待</h2>
           <p className="mb-4 text-xs text-gray-500">
@@ -448,18 +470,22 @@ export default function StaffManager({ staffList }: StaffManagerProps) {
                       : <Toggle
                           checked={staff.is_active}
                           onChange={() => handleToggleActive(staff.id, staff.is_active, staff.full_name)}
-                          disabled={staff.role === 'admin'}
+                          disabled={isDemo || staff.role === 'admin'}
                         />
                     }
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <button
-                      onClick={() => openEdit(staff)}
-                      className="text-gray-400 transition-colors hover:text-gray-700"
-                      aria-label="編集する"
-                    >
-                      <Pencil className="h-4 w-4" aria-hidden />
-                    </button>
+                    {isDemo ? (
+                      <span className="text-gray-300" aria-hidden><Pencil className="h-4 w-4" /></span>
+                    ) : (
+                      <button
+                        onClick={() => openEdit(staff)}
+                        className="text-gray-400 transition-colors hover:text-gray-700"
+                        aria-label="編集する"
+                      >
+                        <Pencil className="h-4 w-4" aria-hidden />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -504,7 +530,7 @@ export default function StaffManager({ staffList }: StaffManagerProps) {
                 <button
                   type="button"
                   onClick={handleBulkApprove}
-                  disabled={selectedIds.size === 0 || bulkApproveLoading}
+                  disabled={isDemo || selectedIds.size === 0 || bulkApproveLoading}
                   className="btn-primary py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {bulkApproveLoading
@@ -550,18 +576,22 @@ export default function StaffManager({ staffList }: StaffManagerProps) {
                             : <Toggle
                                 checked={staff.is_active}
                                 onChange={() => handleToggleActive(staff.id, staff.is_active, staff.full_name)}
-                                disabled={staff.role === 'admin'}
+                                disabled={isDemo || staff.role === 'admin'}
                               />
                           }
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => openEdit(staff)}
-                            className="text-gray-400 transition-colors hover:text-gray-700"
-                            aria-label="編集する"
-                          >
-                            <Pencil className="h-4 w-4" aria-hidden />
-                          </button>
+                          {isDemo ? (
+                            <span className="text-gray-300" aria-hidden><Pencil className="h-4 w-4" /></span>
+                          ) : (
+                            <button
+                              onClick={() => openEdit(staff)}
+                              className="text-gray-400 transition-colors hover:text-gray-700"
+                              aria-label="編集する"
+                            >
+                              <Pencil className="h-4 w-4" aria-hidden />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -774,31 +804,35 @@ export default function StaffManager({ staffList }: StaffManagerProps) {
             )}
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleEditSave}
-                disabled={editLoading}
-                className="btn-primary flex-1"
-              >
-                {editLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : '保存する'}
-              </button>
+              {!isDemo && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleEditSave}
+                    disabled={editLoading}
+                    className="btn-primary flex-1"
+                  >
+                    {editLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : '保存する'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteAccount}
+                    disabled={editLoading}
+                    className="btn-secondary"
+                    style={{ color: '#b91c1c', borderColor: '#fecaca', backgroundColor: '#fff1f2' }}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                    削除
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={closeEdit}
                 disabled={editLoading}
                 className="btn-secondary"
               >
-                キャンセル
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteAccount}
-                disabled={editLoading}
-                className="btn-secondary"
-                style={{ color: '#b91c1c', borderColor: '#fecaca', backgroundColor: '#fff1f2' }}
-              >
-                <Trash2 className="h-4 w-4" aria-hidden />
-                削除
+                {isDemo ? '閉じる' : 'キャンセル'}
               </button>
             </div>
           </div>

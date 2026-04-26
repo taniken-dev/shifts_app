@@ -110,7 +110,7 @@ export default async function AdminStaffPage() {
         <h1 className="text-xl font-bold text-gray-900">スタッフ管理</h1>
         <p className="mt-1 text-sm text-gray-500">承認・退会申請・スキル・認証情報を管理できます。</p>
       </div>
-      <StaffManager staffList={enrichedStaffList} />
+      <StaffManager staffList={enrichedStaffList} isDemo={isDemo} />
     </div>
   )
 }

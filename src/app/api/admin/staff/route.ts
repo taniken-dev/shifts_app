@@ -157,6 +157,10 @@ export async function PUT(request: NextRequest) {
   const { error, status, user, isDemo } = await assertAdmin()
   if (error || !user) return NextResponse.json({ error }, { status })
 
+  if (isDemo) {
+    return NextResponse.json({ error: 'デモアカウントではスタッフ情報を編集できません' }, { status: 403 })
+  }
+
   let body: unknown
   try {
     body = await request.json()
@@ -234,6 +238,10 @@ const patchSchema = z.object({
 export async function PATCH(request: NextRequest) {
   const { error, status, isDemo } = await assertAdmin()
   if (error) return NextResponse.json({ error }, { status })
+
+  if (isDemo) {
+    return NextResponse.json({ error: 'デモアカウントでは承認・有効状態を変更できません' }, { status: 403 })
+  }
 
   let body: unknown
   try {
