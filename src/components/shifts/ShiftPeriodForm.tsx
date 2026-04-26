@@ -342,6 +342,7 @@ export default function ShiftPeriodForm() {
   const [isEditMode,       setIsEditMode]       = useState(false)
   const [toastMsg,         setToastMsg]         = useState<string | null>(null)
   const [fetchingExisting, setFetchingExisting] = useState(false)
+  const [touchedCard,      setTouchedCard]      = useState<'period' | 'calendar' | null>(null)
 
   const [optimisticShifts, setOptimisticShifts] = useOptimistic(
     existingShifts,
@@ -621,7 +622,7 @@ export default function ShiftPeriodForm() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
       {/* ── 期間選択カード ── */}
-      <div className="card-green-lift">
+      <div className={`card-green-lift${touchedCard === 'period' ? ' card-green-lift--touched' : ''}`} onTouchStart={() => setTouchedCard('period')}>
       <div className="card-inner" style={{ padding: '22px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
           <div style={{
@@ -745,7 +746,7 @@ export default function ShiftPeriodForm() {
       )}
 
       {/* ── カレンダーカード ── */}
-      <div className="card-green-lift">
+      <div className={`card-green-lift${touchedCard === 'calendar' ? ' card-green-lift--touched' : ''}`} onTouchStart={() => setTouchedCard('calendar')}>
       <div className="card-inner" style={{
         padding: '20px 16px',
         border: `1px solid ${bulkMode ? '#bfdbfe' : 'transparent'}`,

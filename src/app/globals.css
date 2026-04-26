@@ -557,9 +557,9 @@
     transform: translate(8px, -8px);
   }
 }
-/* スマホ（タッチ操作）ではタップ時に黄緑の背景色に変更 */
+/* スマホ（タッチ操作）では最後にタッチしたカードを黄緑の背景色にする */
 @media (hover: none) {
-  .card-green-lift:active > .card-inner {
+  .card-green-lift--touched > .card-inner {
     background-color: #ecfccb;
   }
 }
